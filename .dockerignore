@@ -1,0 +1,40 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies (installed fresh inside Docker)
+node_modules
+
+# Build output (rebuilt inside Docker)
+dist
+
+# Environment files — never bake secrets into the image
+.env
+.env.*
+!.env.example
+
+# Uploaded media — served from a named volume, not baked into image
+uploads
+
+# Development tools
+*.log
+coverage
+.nyc_output
+
+# Editor / OS
+.DS_Store
+.vscode
+*.swp
+*.swo
+Thumbs.db
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+jest.config.*
