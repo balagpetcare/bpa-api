@@ -29,8 +29,14 @@ export function errorHandler(
   if (err instanceof ZodError) {
     const formattedErrors = err.errors.map((e) => ({
       path: e.path.join('.'),
-      message: 'Invalid value',
+      message: e.message || 'Invalid value',
     }));
+    // Sanitized (path + message only, no request body/headers/tokens) so a
+    // developer can see exactly which field failed without the generic
+    // client-facing message hiding it.
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[ValidationError] ${requestId} ${req.method} ${req.path}:`, formattedErrors);
+    }
     res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
       requestId,
@@ -95,7 +101,12 @@ export function errorHandler(
         return;
       }
       case 'P2023':
-        // Inconsistent column data (e.g. invalid UUID format)
+        // Inconsistent column data (e.g. invalid UUID format). Log the
+        // sanitized Prisma error code/meta in dev only — never the raw
+        // error message, which can echo back submitted field values.
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(`[ValidationError] ${requestId} ${req.method} ${req.path}: Prisma P2023 (inconsistent column data)`);
+        }
         res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
           requestId,
@@ -105,7 +116,15 @@ export function errorHandler(
     }
   }
 
-  if (process.env.NODE_ENV !== 'production') {
+  // P2021/P2022: table or column does not exist. This is a schema-drift error, not
+  // "no data found" — always log it (including in production) so it never gets
+  // mistaken for a normal empty result.
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    (err.code === 'P2021' || err.code === 'P2022')
+  ) {
+    console.error({ requestId, code: err.code, message: 'Database schema drift detected', meta: err.meta });
+  } else if (process.env.NODE_ENV !== 'production') {
     console.error({ requestId, err });
   }
 

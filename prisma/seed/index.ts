@@ -1,18 +1,3 @@
-/**
- * BPA Backend API — Master Database Seeder
- *
- * Idempotent: safe to run multiple times. Uses upsert / findFirst guards.
- * No production data is deleted or truncated.
- *
- * Usage:
- *   npm run db:seed
- *
- * Required env vars for admin user:
- *   SEED_ADMIN_EMAIL     (or ROOT_ADMIN_EMAIL)
- *   SEED_ADMIN_PASSWORD  (or ROOT_ADMIN_PASSWORD)
- *   SEED_ADMIN_NAME      (or ROOT_ADMIN_NAME)   — optional, defaults to "BPA Super Admin"
- */
-
 import 'dotenv/config';
 import { LocationType, PrismaClient } from '@prisma/client';
 
@@ -22,19 +7,24 @@ import { seedSiteSettings } from './site-settings.seed';
 import { seedLocations } from './locations.seed';
 import { seedLocationNodes } from './location-nodes.seed';
 import { seedCampaigns } from './campaigns.seed';
+import { seedCampaignCoverages } from './campaign-coverages.seed';
 import { seedCommunity } from './community.seed';
+import { seedMembershipReferenceData } from './membership-reference.seed';
 import { seedDonations } from './donations.seed';
 import { seedCms } from './cms.seed';
 import { seedPayments } from './payments.seed';
 import { seedMailSystem } from './mail.seed';
 import { seedContactInquiryConfig } from './contact-inquiry.seed';
+import { seedClinicDirectory } from './clinic-directory.seed';
 import { seedCampaignFaqs } from './campaign-faqs.seed';
-import { seedAppControl } from './app-control.seed';
 import { seedVideoCategories } from './video-categories.seed';
+import { seedAppControl } from './app-control.seed';
+import { seedAppControlReferenceData } from './app-control-reference.seed';
+import { seedPartnerClinics } from './partner-clinics.seed';
 
 const prisma = new PrismaClient();
 
-function line(char = '─', width = 60) {
+function line(char = '─', width = 64) {
   return char.repeat(width);
 }
 
@@ -60,11 +50,15 @@ const CRITICAL_MODEL_COUNTS: Array<{ label: string; delegate: string }> = [
   { label: 'Campaigns', delegate: 'campaign' },
   { label: 'Campaign services', delegate: 'campaignService' },
   { label: 'Campaign sessions', delegate: 'campaignSession' },
+  { label: 'Campaign coverages', delegate: 'campaignCoverage' },
   { label: 'Community zones', delegate: 'communityZone' },
   { label: 'Contribution plans', delegate: 'contributionPlan' },
   { label: 'Membership programs', delegate: 'communityMembershipProgram' },
   { label: 'Membership tiers', delegate: 'communityMembershipTier' },
   { label: 'Membership benefits', delegate: 'communityMembershipBenefit' },
+  { label: 'Membership v2 benefits', delegate: 'membershipBenefit' },
+  { label: 'Membership plan links', delegate: 'membershipPlanBenefit' },
+  { label: 'Membership FAQs', delegate: 'membershipFaq' },
   { label: 'Donation purposes', delegate: 'donationPurpose' },
   { label: 'Donation campaigns', delegate: 'donationCampaign' },
   { label: 'Donation page settings', delegate: 'donationPageSetting' },
@@ -78,205 +72,224 @@ const CRITICAL_MODEL_COUNTS: Array<{ label: string; delegate: string }> = [
   { label: 'Footer configs', delegate: 'footerConfig' },
   { label: 'Footer link groups', delegate: 'footerLinkGroup' },
   { label: 'Footer links', delegate: 'footerLink' },
-  { label: 'Pet census campaigns', delegate: 'petCensusCampaign' },
   { label: 'Payment placeholders', delegate: 'petSmartSyncSetting' },
   { label: 'Email layouts', delegate: 'emailLayoutSetting' },
   { label: 'Mail accounts', delegate: 'mailAccount' },
   { label: 'Contact types', delegate: 'contactType' },
   { label: 'Inquiry categories', delegate: 'inquiryCategory' },
+  { label: 'Contact departments', delegate: 'contactDepartment' },
+  { label: 'Contact priority rules', delegate: 'contactPriorityRule' },
+  { label: 'Clinic organizations', delegate: 'clinicOrganization' },
+  { label: 'Clinic branches', delegate: 'clinicBranch' },
+  { label: 'Clinic branch phones', delegate: 'clinicBranchPhone' },
+  { label: 'Clinic branch services', delegate: 'clinicBranchService' },
+  { label: 'Clinic branch facilities', delegate: 'clinicBranchFacility' },
+  { label: 'Clinic branch animal types', delegate: 'clinicBranchAnimalType' },
+  { label: 'Clinic branch sources', delegate: 'clinicBranchSource' },
   { label: 'Campaign FAQs', delegate: 'campaignFaq' },
+  { label: 'Content categories', delegate: 'contentCategory' },
   { label: 'App home sections', delegate: 'appHomeSection' },
   { label: 'App navigation items', delegate: 'appNavigationItem' },
   { label: 'App page contents', delegate: 'appPageContent' },
   { label: 'App banners', delegate: 'appBanner' },
+  { label: 'App quick actions', delegate: 'appQuickAction' },
+  { label: 'App featured services', delegate: 'appFeaturedService' },
+  { label: 'App offers', delegate: 'appOffer' },
+  { label: 'App tutorial guides', delegate: 'appTutorialGuide' },
   { label: 'App version settings', delegate: 'appVersionSetting' },
   { label: 'App theme settings', delegate: 'appThemeSetting' },
   { label: 'App popup notices', delegate: 'appPopupNotice' },
-  { label: 'Content categories', delegate: 'contentCategory' },
+  { label: 'Partner clinics (curated)', delegate: 'partnerClinic' },
 ];
 
-async function printFinalCounts(prisma: PrismaClient) {
+async function printFinalCounts(db: PrismaClient) {
   section('Final Critical Model Counts');
 
   for (const item of CRITICAL_MODEL_COUNTS) {
-    const delegate = (prisma as unknown as Record<string, { count: () => Promise<number> }>)[item.delegate];
+    const delegate = (db as unknown as Record<string, { count: () => Promise<number> }>)[item.delegate];
     const count = await delegate.count();
     console.log(`  ${item.label.padEnd(28)} ${count}`);
   }
 
-  console.log('  ' + 'Location DIVISION'.padEnd(28) + await prisma.location.count({ where: { type: LocationType.DIVISION, isActive: true } }));
-  console.log('  ' + 'Location DISTRICT'.padEnd(28) + await prisma.location.count({ where: { type: LocationType.DISTRICT, isActive: true } }));
-  console.log('  ' + 'Location UPAZILA'.padEnd(28) + await prisma.location.count({ where: { type: LocationType.UPAZILA, isActive: true } }));
-  console.log('  ' + 'Location THANA'.padEnd(28) + await prisma.location.count({ where: { type: LocationType.THANA, isActive: true } }));
-  console.log('  ' + 'Location UNION'.padEnd(28) + await prisma.location.count({ where: { type: LocationType.UNION, isActive: true } }));
-  console.log('  ' + 'Location CITY_CORPORATION'.padEnd(28) + await prisma.location.count({ where: { type: LocationType.CITY_CORPORATION, isActive: true } }));
-  console.log('  ' + 'Location CITY_ZONE'.padEnd(28) + await prisma.location.count({ where: { type: LocationType.CITY_ZONE, isActive: true } }));
-  console.log('  ' + 'Location WARD'.padEnd(28) + await prisma.location.count({ where: { type: LocationType.WARD, isActive: true } }));
+  console.log(`  ${'Location DIVISION'.padEnd(28)}${await db.location.count({ where: { type: LocationType.DIVISION, isActive: true } })}`);
+  console.log(`  ${'Location DISTRICT'.padEnd(28)}${await db.location.count({ where: { type: LocationType.DISTRICT, isActive: true } })}`);
+  console.log(`  ${'Location UPAZILA'.padEnd(28)}${await db.location.count({ where: { type: LocationType.UPAZILA, isActive: true } })}`);
+  console.log(`  ${'Location THANA'.padEnd(28)}${await db.location.count({ where: { type: LocationType.THANA, isActive: true } })}`);
+  console.log(`  ${'Location UNION'.padEnd(28)}${await db.location.count({ where: { type: LocationType.UNION, isActive: true } })}`);
+  console.log(`  ${'Location CITY_CORPORATION'.padEnd(28)}${await db.location.count({ where: { type: LocationType.CITY_CORPORATION, isActive: true } })}`);
+  console.log(`  ${'Location CITY_ZONE'.padEnd(28)}${await db.location.count({ where: { type: LocationType.CITY_ZONE, isActive: true } })}`);
+  console.log(`  ${'Location WARD'.padEnd(28)}${await db.location.count({ where: { type: LocationType.WARD, isActive: true } })}`);
 }
 
 async function main() {
-  console.log('\n' + line('═'));
+  console.log(`\n${line('═')}`);
   console.log(' BPA Database Seeder — Complete Idempotent Setup');
   console.log(` Started: ${new Date().toISOString()}`);
   console.log(line('═'));
 
-  // ── 1. Roles & Permissions ────────────────────────────────────────────────
-  section('1/13  Roles & Permissions');
-  const rolesResult = await seedRolesAndPermissions(prisma);
-  console.log(`  ✓ Permissions  : ${rolesResult.permissions.total} (all resources × actions)`);
-  console.log(`  ✓ Roles        : ${rolesResult.roles.upserted} upserted`);
-  console.log(`  ✓ Role mappings: ${rolesResult.mappings.upserted} synced`);
-  console.log(`    Roles: super_admin, admin, editor, viewer, campaign_manager, campaign_volunteer, community_fund_admin, community_fund_viewer`);
+  section('1/19 Roles & Permissions');
+  const roles = await seedRolesAndPermissions(prisma);
+  console.log(`  Permissions      ${roles.permissions.total}`);
+  console.log(`  Roles            ${roles.roles.upserted}`);
+  console.log(`  Role mappings    ${roles.mappings.upserted}`);
 
-  // ── 2. Admin User ──────────────────────────────────────────────────────────
-  section('2/13  Admin User');
-  const userResult = await seedAdminUser(prisma);
-  if (userResult.skipped) {
-    console.log(`  ⚠  Admin user skipped: ${userResult.reason}`);
-    if (userResult.reason === 'no_password') {
-      console.log('     Set SEED_ADMIN_PASSWORD (or ROOT_ADMIN_PASSWORD) in .env and re-run.');
-      console.log('     Campaign seed will create the vaccine catalog/certificate template, then skip campaign creation until the admin user exists.');
-    }
+  section('2/19 Admin User');
+  const admin = await seedAdminUser(prisma);
+  if (admin.skipped) {
+    console.log(`  Skipped          ${admin.reason}`);
   } else {
-    console.log(`  ✓ Admin email  : ${userResult.email}`);
-    console.log(`  ✓ Admin role   : ${userResult.role}`);
-    console.log(`  ✓ Status       : upserted (password updated if changed in .env)`);
+    console.log(`  Admin email      ${admin.email}`);
+    console.log(`  Admin role       ${admin.role}`);
   }
 
-  // ── 3. Site Settings ──────────────────────────────────────────────────────
-  section('3/13  Site Settings');
-  const settingsResult = await seedSiteSettings(prisma);
-  console.log(`  ✓ SiteSettings singleton upserted (id=default): ${settingsResult.upserted} row`);
+  section('3/19 Site Settings');
+  const site = await seedSiteSettings(prisma);
+  console.log(`  Upserted         ${site.upserted}`);
 
-  // ── 4. Location Hierarchy ─────────────────────────────────────────────────
-  section('4/13  Location Hierarchy');
-  const locResult = await seedLocations(prisma);
-  console.log(`  ✓ Country      : ${locResult.country}`);
-  console.log(`  ✓ Divisions    : ${locResult.divisions}`);
-  console.log(`  ✓ Districts    : ${locResult.districts}`);
-  console.log(`  ✓ City Corps   : ${locResult.cityCorporations} (DNCC, DSCC)`);
-  console.log(`  ✓ Zones        : ${locResult.zones} (DNCC×10 + DSCC×10)`);
+  section('4/19 Location Hierarchy');
+  const locations = await seedLocations(prisma);
+  console.log(`  Country          ${locations.country}`);
+  console.log(`  Divisions        ${locations.divisions}`);
+  console.log(`  Districts        ${locations.districts}`);
+  console.log(`  City corps       ${locations.cityCorporations}`);
+  console.log(`  Zones            ${locations.zones}`);
 
-  // ── 5. Location Nodes (unified tree from flat hierarchy) ──────────────────
-  section('5/13  Location Nodes (unified tree)');
-  const nodeResult = await seedLocationNodes(prisma);
-  console.log(`  Active tree counts include ${nodeResult.upazilas} upazilas, ${nodeResult.unions} unions, and ${nodeResult.wards} wards`);
-  if (nodeResult.deactivatedLegacyNodes > 0) {
-    console.log(`  Legacy subset nodes deactivated: ${nodeResult.deactivatedLegacyNodes}`);
-  }
-  console.log(`  ✓ Divisions    : ${nodeResult.divisions} nodes`);
-  console.log(`  ✓ Districts    : ${nodeResult.districts} nodes`);
-  console.log(`  ✓ City Corps   : ${nodeResult.cityCorporations} nodes`);
-  console.log(`  ✓ Zones        : ${nodeResult.zones} nodes`);
+  section('5/19 Location Nodes');
+  const locationNodes = await seedLocationNodes(prisma);
+  console.log(`  Divisions        ${locationNodes.divisions}`);
+  console.log(`  Districts        ${locationNodes.districts}`);
+  console.log(`  City corps       ${locationNodes.cityCorporations}`);
+  console.log(`  Zones            ${locationNodes.zones}`);
+  console.log(`  Upazilas         ${locationNodes.upazilas}`);
+  console.log(`  Unions           ${locationNodes.unions}`);
+  console.log(`  Wards            ${locationNodes.wards}`);
 
-  // ── 6. Campaigns & Vaccines ───────────────────────────────────────────────
-  section('6/13  Campaigns & Vaccine Catalog');
-  const campResult = await seedCampaigns(prisma);
-  console.log(`  ✓ Vaccines     : ${campResult.vaccines.created} created, ${campResult.vaccines.skipped} already existed`);
-  console.log(`  ✓ Cert template: ${campResult.certTemplate}`);
-  console.log(`  ✓ Campaign     : Cat Vaccination Dhaka 2026 — ${campResult.campaign}`);
-  console.log(`  ✓ Svcs/Sessions: ${campResult.services} services, ${campResult.sessions} session(s)`);
+  section('6/19 Campaigns & Vaccines');
+  const campaigns = await seedCampaigns(prisma);
+  console.log(`  Vaccines         ${campaigns.vaccines.created} created, ${campaigns.vaccines.skipped} existing`);
+  console.log(`  Cert template    ${campaigns.certTemplate}`);
+  console.log(`  Campaign         ${campaigns.campaign}`);
+  console.log(`  Services         ${campaigns.services}`);
+  console.log(`  Sessions         ${campaigns.sessions}`);
 
-  // ── 6. Community & Membership ─────────────────────────────────────────────
-  section('7/13  Community & Membership Engine');
-  const commResult = await seedCommunity(prisma);
-  console.log(`  ✓ Community zones        : ${commResult.zones}`);
-  console.log(`  ✓ Contribution plan      : ${commResult.contributionPlan}`);
-  console.log(`  ✓ Membership program     : ${commResult.membershipProgram}`);
-  console.log(`  ✓ Membership tiers       : ${commResult.tiers} (Primary, Premium, Enterprise)`);
-  console.log(`  ✓ Membership services    : ${commResult.services} new`);
-  console.log(`  ✓ Tier discounts         : ${commResult.discounts} synced`);
-  console.log(`  ✓ Membership benefits    : ${commResult.benefits} new`);
-  console.log(`  ✓ Membership documents   : ${commResult.documents} new`);
-  console.log(`  ✓ Diagnostic services    : ${commResult.diagnosticServices} new`);
-  console.log(`  ✓ Care partner benefits  : ${commResult.carePartnerBenefits} new`);
-  console.log(`  ✓ Social impact programs : ${commResult.socialImpact} new`);
-  console.log(`  ✓ Roadmap items          : ${commResult.roadmap} new`);
+  section('7/19 Campaign Coverages');
+  const coverages = await seedCampaignCoverages(prisma);
+  console.log(`  Coverage rows    ${coverages.coverages}`);
 
-  // ── 7. Donations ──────────────────────────────────────────────────────────
-  section('8/13  Donation System');
-  const donResult = await seedDonations(prisma);
-  console.log(`  ✓ Purposes         : ${donResult.purposes}`);
-  console.log(`  ✓ Campaigns        : ${donResult.campaigns}`);
-  console.log(`  ✓ Impact stories   : ${donResult.stories}`);
-  console.log(`  ✓ QR codes         : ${donResult.qrCodes}`);
-  console.log(`  ✓ Page settings    : ${donResult.pageSetting}`);
-  console.log(`  ✓ Transparency rpt : ${donResult.transparency}`);
+  section('8/19 Community & Membership Engine');
+  const community = await seedCommunity(prisma);
+  console.log(`  Community zones  ${community.zones}`);
+  console.log(`  Contribution plan${community.contributionPlan}`);
+  console.log(`  Membership prog  ${community.membershipProgram}`);
+  console.log(`  Membership tiers ${community.tiers}`);
+  console.log(`  Services         ${community.services}`);
+  console.log(`  Tier discounts   ${community.discounts}`);
+  console.log(`  Benefits         ${community.benefits}`);
+  console.log(`  Documents        ${community.documents}`);
+  console.log(`  Diagnostic svc   ${community.diagnosticServices}`);
+  console.log(`  Care benefits    ${community.carePartnerBenefits}`);
+  console.log(`  Social impact    ${community.socialImpact}`);
+  console.log(`  Roadmap items    ${community.roadmap}`);
 
-  // ── 8. CMS ────────────────────────────────────────────────────────────────
-  section('9/13  CMS (Homepage, Hero Slides, Footer, News)');
-  const cmsResult = await seedCms(prisma);
-  console.log(`  ✓ News categories  : ${cmsResult.categories}`);
-  console.log(`  ✓ News tags        : ${cmsResult.tags}`);
-  console.log(`  ✓ Homepage record  : ${cmsResult.homepage} (locale=en)`);
-  console.log(`  ✓ Homepage sections: ${cmsResult.sections} new`);
-  console.log(`  ✓ Hero slides      : ${cmsResult.slides} new`);
-  console.log(`  ✓ Footer config    : ${cmsResult.footer} (with link groups & links)`);
-  console.log(`  ✓ Pet Census setup : ${cmsResult.petCensus}`);
+  section('9/19 Membership Reference Data');
+  const membershipRefs = await seedMembershipReferenceData(prisma);
+  console.log(`  Benefit rows     ${membershipRefs.benefits}`);
+  console.log(`  Plan links       ${membershipRefs.planBenefits}`);
+  console.log(`  FAQ rows         ${membershipRefs.faqs}`);
 
-  // ── 9. Payment / Integration Placeholders ─────────────────────────────────
-  section('10/13 Payment & Integration Settings');
-  const payResult = await seedPayments(prisma);
-  console.log(`  ✓ PSS settings: ${payResult.pssSettings.upserted} placeholder keys upserted`);
-  console.log(`    (Activate via admin panel → PetSmart → Settings)`);
+  section('10/19 Donation System');
+  const donations = await seedDonations(prisma);
+  console.log(`  Purposes         ${donations.purposes}`);
+  console.log(`  Campaigns        ${donations.campaigns}`);
+  console.log(`  Stories          ${donations.stories}`);
+  console.log(`  QR codes         ${donations.qrCodes}`);
+  console.log(`  Page settings    ${donations.pageSetting}`);
+  console.log(`  Transparency     ${donations.transparency}`);
 
-  // ── 10. Mail & Communications System ──────────────────────────────────────
-  section('11/14 Mail & Communications System');
-  const mailResult = await seedMailSystem(prisma);
-  console.log(`  ✓ Email Layouts    : ${mailResult.emailLayouts} layouts seeded`);
-  console.log(`  ✓ Mail Accounts    : ${mailResult.mailAccounts} accounts seeded`);
-  console.log('  Mail accounts seeded inactive; update passwords from Admin Panel.');
+  section('11/19 CMS');
+  const cms = await seedCms(prisma);
+  console.log(`  News categories  ${cms.categories}`);
+  console.log(`  News tags        ${cms.tags}`);
+  console.log(`  Homepage         ${cms.homepage}`);
+  console.log(`  Sections         ${cms.sections}`);
+  console.log(`  Hero slides      ${cms.slides}`);
+  console.log(`  Footer config    ${cms.footer}`);
+  console.log(`  Pet census setup ${cms.petCensus}`);
 
-  // ── 11. Contact Inquiry Config ─────────────────────────────────────────────
-  section('12/14 Contact Inquiry Config');
-  const ciResult = await seedContactInquiryConfig(prisma);
-  console.log(`  ✓ Contact types    : ${ciResult.types.created} created, ${ciResult.types.skipped} already existed`);
-  console.log(`  ✓ Inquiry categories: ${ciResult.categories.created} created, ${ciResult.categories.skipped} already existed`);
+  section('12/19 Payment Settings');
+  const payments = await seedPayments(prisma);
+  console.log(`  PSS settings     ${payments.pssSettings.upserted}`);
 
-  // ── 13. Campaign FAQs ───────────────────────────────────────────────────────
-  section('13/14 Campaign FAQs');
-  const faqResult = await seedCampaignFaqs(prisma);
-  console.log(`  ✓ Campaign FAQs    : ${faqResult.created} created, ${faqResult.skipped} skipped, ${faqResult.total} total`);
+  section('13/19 Mail System');
+  const mail = await seedMailSystem(prisma);
+  console.log(`  Email layouts    ${mail.emailLayouts}`);
+  console.log(`  Mail accounts    ${mail.mailAccounts}`);
 
-  section('14/14 BPA App Control');
-  const appControlResult = await seedAppControl(prisma);
-  console.log(`  âœ“ Home sections    : ${appControlResult.homeSections}`);
-  console.log(`  âœ“ Navigation items : ${appControlResult.navigationItems}`);
-  console.log(`  âœ“ Page contents    : ${appControlResult.pageContents}`);
-  console.log(`  âœ“ Sample banners   : ${appControlResult.banners} disabled by default`);
-  console.log(`  âœ“ Version settings : ${appControlResult.versionSettings}`);
-  console.log(`  âœ“ Theme settings   : ${appControlResult.themeSettings}`);
-  console.log(`  âœ“ Popup notices    : ${appControlResult.popupNotices} disabled by default`);
-  console.log(`  âœ“ Maintenance mode : ${appControlResult.maintenanceDisabled ? 'disabled' : 'enabled'}`);
+  section('14/19 Contact Inquiry Config');
+  const contact = await seedContactInquiryConfig(prisma);
+  console.log(`  Contact types    ${contact.types.created} created, ${contact.types.skipped} existing`);
+  console.log(`  Categories       ${contact.categories.created} created, ${contact.categories.skipped} existing`);
+  console.log(`  Departments      ${contact.departments.upserted}`);
+  console.log(`  Priority rules   ${contact.priorityRules.upserted}`);
 
-  section('Video Content Categories');
-  const videoCategoryResult = await seedVideoCategories(prisma);
-  console.log(`  ✓ Attempted         : ${videoCategoryResult.attempted}`);
-  console.log(`  ✓ Inserted/updated  : ${videoCategoryResult.insertedOrUpdated}`);
-  console.log(`  ✓ Video categories  : ${videoCategoryResult.totalMatching}/${videoCategoryResult.attempted}`);
-  console.log(`  ✓ Unique slugs      : ${videoCategoryResult.uniqueSlugs}/${videoCategoryResult.attempted}`);
-  console.log(`  ✓ Missing slugs     : ${videoCategoryResult.missingSlugs.join(',') || 'none'}`);
-  console.log(`  ✓ Duplicate slugs   : ${videoCategoryResult.duplicateSlugs.join(',') || 'none'}`);
+  section('15/19 Clinic Directory');
+  const clinic = await seedClinicDirectory(prisma);
+  console.log(`  Organizations    ${clinic.organizations}`);
+  console.log(`  Branches         ${clinic.branches}`);
+  console.log(`  Phones           ${clinic.phones}`);
+  console.log(`  Hours            ${clinic.openingHours}`);
+  console.log(`  Services         ${clinic.services}`);
+  console.log(`  Animal types     ${clinic.animalTypes}`);
+  console.log(`  Facilities       ${clinic.facilities}`);
+  console.log(`  Sources          ${clinic.sources}`);
+  console.log(`  Social links     ${clinic.socialLinks}`);
+  console.log(`  Images           ${clinic.images}`);
+
+  section('16/19 Campaign FAQs');
+  const faqs = await seedCampaignFaqs(prisma);
+  console.log(`  FAQ rows         ${faqs.total}`);
+
+  section('17/19 Video Content Categories');
+  const videoCategories = await seedVideoCategories(prisma);
+  console.log(`  Attempted        ${videoCategories.attempted}`);
+  console.log(`  Upserted         ${videoCategories.insertedOrUpdated}`);
+  console.log(`  Matching         ${videoCategories.totalMatching}`);
+  console.log(`  Unique slugs     ${videoCategories.uniqueSlugs}`);
+  console.log(`  Missing slugs    ${videoCategories.missingSlugs.join(',') || 'none'}`);
+  console.log(`  Duplicate slugs  ${videoCategories.duplicateSlugs.join(',') || 'none'}`);
+
+  section('18/19 App Control Core');
+  const appControl = await seedAppControl(prisma);
+  console.log(`  Home sections    ${appControl.homeSections}`);
+  console.log(`  Navigation items ${appControl.navigationItems}`);
+  console.log(`  Page contents    ${appControl.pageContents}`);
+  console.log(`  Banners          ${appControl.banners}`);
+  console.log(`  Version settings ${appControl.versionSettings}`);
+  console.log(`  Theme settings   ${appControl.themeSettings}`);
+  console.log(`  Popup notices    ${appControl.popupNotices}`);
+
+  section('19/19 App Control Reference Data');
+  const appControlRefs = await seedAppControlReferenceData(prisma);
+  console.log(`  Quick actions    ${appControlRefs.quickActions}`);
+  console.log(`  Featured svc     ${appControlRefs.featuredServices}`);
+  console.log(`  Offers           ${appControlRefs.offers}`);
+  console.log(`  Tutorials        ${appControlRefs.tutorialsGuides}`);
+
+  section('20/20 Partner Clinics (curated homepage list)');
+  const partnerClinics = await seedPartnerClinics(prisma);
+  console.log(`  Curated clinics  ${partnerClinics.partnerClinics} (intentionally empty — curate via BPA Admin)`);
 
   await printFinalCounts(prisma);
 
-  // ── Summary ────────────────────────────────────────────────────────────────
-  console.log('\n' + line('═'));
+  console.log(`\n${line('═')}`);
   console.log(' SEED COMPLETE');
   console.log(` Finished: ${new Date().toISOString()}`);
   console.log(line('═'));
-  console.log('\n Next steps:');
-  console.log('  1. Add SEED_ADMIN_EMAIL + SEED_ADMIN_PASSWORD to .env, then re-run db:seed to create the admin user');
-  console.log('  2. Upload real images via Admin → Media for hero slides');
-  console.log('  3. Confirm EPS payment credentials in .env for live donations');
-  console.log('  4. Campaign "Cat Vaccination Dhaka 2026" is seeded as registration_open — publish sessions from Admin when ready');
-  console.log('  5. Run: npx prisma studio  — to inspect seeded data visually');
-  console.log('');
 }
 
 main()
-  .catch((e) => {
-    console.error('\n[SEED FAILED]', e);
+  .catch((error) => {
+    console.error('\n[SEED FAILED]', error);
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());

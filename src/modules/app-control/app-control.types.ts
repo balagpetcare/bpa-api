@@ -20,7 +20,15 @@ export const APP_CONTROL_PAGE_KEYS = [
 
 const nullableText = z.string().trim().max(5000).optional().nullable();
 const nullableTitle = z.string().trim().min(1).max(255).optional().nullable();
-const nullableUrl = z.string().trim().url().max(2000).optional().nullable();
+// An empty string is treated the same as an explicit null (clear the
+// field) rather than being rejected by `.url()` — the admin UI already
+// normalizes '' -> null before sending, but the API must not depend on
+// that; any other client sending '' to explicitly clear imageUrl/
+// mobileImageUrl/logoUrl must have the same effect, not a validation error.
+const nullableUrl = z.preprocess(
+  (v) => (v === '' ? null : v),
+  z.string().trim().url().max(2000).optional().nullable(),
+);
 const nullableIso = z.string().datetime().optional().nullable();
 const uuidSchema = z.string().uuid();
 

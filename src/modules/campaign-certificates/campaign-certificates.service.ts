@@ -6,6 +6,7 @@ import { sendCampaignSms } from '../../services/campaign-sms.service';
 import { renderCertificateHtml } from './certificate-html';
 import * as repo from './campaign-certificates.repository';
 import type { IssueCertificateDto, CertificateListQuery } from './campaign-certificates.types';
+import { publishOutboxEvent, enqueueIfNew } from '../push-notifications/outbox';
 
 // ─── Issue ────────────────────────────────────────────────────────
 
@@ -15,7 +16,7 @@ export async function issueCertificate(dto: IssueCertificateDto, issuedById: str
     include: {
       services: { include: { campaignService: { select: { isRequired: true } } } },
       registration: { select: { id: true, campaignId: true, ownerId: true } },
-      pet: { include: { owner: { select: { mobile: true } } } },
+      pet: { include: { owner: { select: { mobile: true, userId: true } } } },
       certificates: { where: { supersededAt: null } },
     },
   });
@@ -41,7 +42,9 @@ export async function issueCertificate(dto: IssueCertificateDto, issuedById: str
     throw AppError.badRequest('Not all required services have been administered.');
   }
 
-  return prisma.$transaction(async (tx) => {
+  const pendingOutboxResults: Array<{ id: string; deduped: boolean }> = [];
+
+  const cert = await prisma.$transaction(async (tx) => {
     const certNumber = await repo.generateCertificateNumber();
     const verifyToken = randomUUID();
 
@@ -98,8 +101,37 @@ export async function issueCertificate(dto: IssueCertificateDto, issuedById: str
       });
     }
 
+    const ownerUserId = petBooking.pet.owner?.userId;
+    if (ownerUserId) {
+      const outboxResult = await publishOutboxEvent(
+        {
+          eventType: 'CERTIFICATE_READY',
+          entityType: 'certificate',
+          entityId: cert.id,
+          dedupeKey: `certificate_ready:${cert.id}`,
+          payload: {
+            category: 'certificate',
+            priority: 'normal',
+            title: `${petBooking.pet.name}'s certificate is ready`,
+            titleBn: `${petBooking.pet.name} এর সার্টিফিকেট প্রস্তুত`,
+            body: `Vaccination certificate ${certNumber} has been issued. Tap to view.`,
+            bodyBn: `টিকা সার্টিফিকেট ${certNumber} ইস্যু করা হয়েছে। দেখতে ট্যাপ করুন।`,
+            deepLink: `bpa://certificates/${cert.id}`,
+            targetUserIds: [ownerUserId],
+          },
+        },
+        tx,
+      );
+      pendingOutboxResults.push(outboxResult);
+    }
+
     return cert;
   });
+
+  for (const result of pendingOutboxResults) {
+    await enqueueIfNew(result);
+  }
+  return cert;
 }
 
 // ─── Reissue ──────────────────────────────────────────────────────

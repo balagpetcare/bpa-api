@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma';
-import type { ContentPostType } from '@prisma/client';
+import type { ContentPostType, Prisma } from '@prisma/client';
 
 export async function createPost(data: any) {
   return prisma.contentPost.create({
@@ -13,8 +13,9 @@ export async function createPost(data: any) {
   });
 }
 
-export async function updatePost(id: string, data: any) {
-  return prisma.contentPost.update({
+export async function updatePost(id: string, data: any, tx?: Prisma.TransactionClient) {
+  const client = tx ?? prisma;
+  return client.contentPost.update({
     where: { id },
     data,
     include: {

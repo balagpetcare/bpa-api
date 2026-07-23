@@ -2,21 +2,12 @@ import * as repo from './content.repository';
 import { AppError } from '../../utils/AppError';
 import sanitizeHtml from 'sanitize-html';
 import type { ContentPostType } from '@prisma/client';
+import { normalizeVideoSourceFields } from './video-source';
+import { prisma } from '../../database/prisma';
+import { publishOutboxEvent, enqueueIfNew } from '../push-notifications/outbox';
 
 // ─── Video source type normalization ─────────────────────────────
 
-function normalizeVideoSourceType(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const normalized = value.toLowerCase().trim();
-  if (['youtube', 'vimeo', 'upload'].includes(normalized)) {
-    return normalized;
-  }
-  // Backwards compatibility: map 'youtube' to 'youtube', etc.
-  if (normalized === 'youtube-embed' || normalized.includes('youtube')) return 'youtube';
-  if (normalized === 'vimeo-embed' || normalized.includes('vimeo')) return 'vimeo';
-  if (normalized.includes('upload') || normalized === 'file') return 'upload';
-  return normalized;
-}
 
 // Sanitize settings for rich text
 const richTextSanitizeOptions = {
@@ -55,15 +46,24 @@ export async function createPost(dto: any, userId: string) {
     throw AppError.conflict('Slug is already in use');
   }
 
-  // Normalize videoSourceType for VIDEO posts
-  let normalizedVideoSourceType = dto.videoSourceType;
-  if (dto.type === 'VIDEO' && dto.videoSourceType) {
-    normalizedVideoSourceType = normalizeVideoSourceType(dto.videoSourceType);
-  }
+  const normalizedVideoSource =
+    dto.type === 'VIDEO'
+      ? normalizeVideoSourceFields({
+          videoSourceType: dto.videoSourceType,
+          videoUrl: dto.videoUrl,
+          videoProvider: dto.videoProvider,
+        })
+      : {
+          videoSourceType: dto.videoSourceType,
+          videoUrl: dto.videoUrl,
+          videoProvider: dto.videoProvider,
+        };
 
   const data = {
     ...dto,
-    videoSourceType: normalizedVideoSourceType,
+    videoSourceType: normalizedVideoSource.videoSourceType,
+    videoUrl: normalizedVideoSource.videoUrl,
+    videoProvider: normalizedVideoSource.videoProvider,
     bodyEn: sanitizeContent(dto.bodyEn),
     bodyBn: sanitizeContent(dto.bodyBn),
     summaryEn: sanitizeContent(dto.summaryEn, true),
@@ -77,6 +77,7 @@ export async function createPost(dto: any, userId: string) {
 export async function updatePost(id: string, dto: any) {
   const post = await repo.findPostById(id);
   if (!post) throw AppError.notFound('Post');
+  const isNewlyPublished = dto.status === 'published' && post.status !== 'published';
 
   if (dto.slug && dto.slug !== post.slug) {
     const existing = await repo.findPostBySlug(dto.slug, false);
@@ -85,22 +86,67 @@ export async function updatePost(id: string, dto: any) {
     }
   }
 
-  // Normalize videoSourceType if provided
-  let videoSourceType = dto.videoSourceType;
-  if (dto.videoSourceType !== undefined) {
-    videoSourceType = normalizeVideoSourceType(dto.videoSourceType);
-  }
+  const effectiveType = dto.type ?? post.type;
+  const normalizedVideoSource =
+    effectiveType === 'VIDEO'
+      ? normalizeVideoSourceFields({
+          videoSourceType: dto.videoSourceType !== undefined ? dto.videoSourceType : post.videoSourceType,
+          videoUrl: dto.videoUrl !== undefined ? dto.videoUrl : post.videoUrl,
+          videoProvider: dto.videoProvider !== undefined ? dto.videoProvider : post.videoProvider,
+        })
+      : null;
 
   const data = {
     ...dto,
-    videoSourceType,
+    ...(normalizedVideoSource
+      ? {
+          videoSourceType: normalizedVideoSource.videoSourceType,
+          videoUrl: normalizedVideoSource.videoUrl,
+          videoProvider: normalizedVideoSource.videoProvider,
+        }
+      : {}),
     bodyEn: dto.bodyEn !== undefined ? sanitizeContent(dto.bodyEn) : undefined,
     bodyBn: dto.bodyBn !== undefined ? sanitizeContent(dto.bodyBn) : undefined,
     summaryEn: dto.summaryEn !== undefined ? sanitizeContent(dto.summaryEn, true) : undefined,
     summaryBn: dto.summaryBn !== undefined ? sanitizeContent(dto.summaryBn, true) : undefined,
+    ...(isNewlyPublished ? { publishedAt: new Date() } : {}),
   };
 
-  return repo.updatePost(id, data);
+  if (!isNewlyPublished) {
+    return repo.updatePost(id, data);
+  }
+
+  // Only a genuine draft -> published transition emits a notification —
+  // subsequent edits to an already-published post never refire it, since
+  // the dedupeKey is per-post and post.status will already be 'published'.
+  const [updated, outboxResult] = await prisma.$transaction(async (tx) => {
+    const updatedPost = await repo.updatePost(id, data, tx);
+    const isVideo = updatedPost.type === 'VIDEO';
+    const result = await publishOutboxEvent(
+      {
+        eventType: isVideo ? 'VIDEO_PUBLISHED' : 'POST_PUBLISHED',
+        entityType: isVideo ? 'video' : 'post',
+        entityId: id,
+        dedupeKey: `${isVideo ? 'video' : 'post'}_published:${id}`,
+        payload: {
+          category: isVideo ? 'video' : 'post',
+          priority: 'normal',
+          title: updatedPost.titleEn,
+          titleBn: updatedPost.titleBn,
+          body: updatedPost.summaryEn || 'New content is now available.',
+          bodyBn: updatedPost.summaryBn || 'নতুন কনটেন্ট এখন উপলব্ধ।',
+          imageUrl: updatedPost.thumbnailUrl || updatedPost.coverImageUrl || undefined,
+          deepLink: isVideo ? `bpa://videos/${updatedPost.slug}` : `bpa://posts/${updatedPost.slug}`,
+          targetAll: true,
+        },
+      },
+      tx,
+    );
+    return [updatedPost, result] as const;
+  });
+
+  await enqueueIfNew(outboxResult);
+  return updated;
 }
 
 export async function deletePost(id: string) {
@@ -119,6 +165,9 @@ export async function getPostById(id: string) {
 export async function getPostBySlug(slug: string, publicOnly = true, userId?: string) {
   const post = await repo.findPostBySlug(slug, publicOnly);
   if (!post) throw AppError.notFound('Post');
+  if (publicOnly && post.publishedAt && post.publishedAt > new Date()) {
+    throw AppError.notFound('Post');
+  }
 
   // Increment views asynchronously
   repo.incrementPostViews(post.id).catch(() => null);
@@ -384,6 +433,7 @@ export async function listPublicVideos(filters: {
 
   // Filter by publish time constraint
   items = items.filter((post) => {
+    if (post.type !== 'VIDEO' || post.status !== 'published') return false;
     if (post.publishedAt === null) return true;
     return post.publishedAt <= now;
   });

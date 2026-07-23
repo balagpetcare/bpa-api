@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { HTTP_STATUS } from '../config/constants';
 import { getRequestId } from './requestId';
 
@@ -116,6 +116,17 @@ export const reactionLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: buildRateLimitHandler('Too many actions. Please slow down.'),
+});
+
+/** Admin notification send/schedule/test-send actions — key by admin user id (not IP,
+ * since a shared office IP shouldn't throttle a single admin's legitimate console use). */
+export const notificationSendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.NOTIFICATION_SEND_RATE_LIMIT_MAX || '20', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.sub || ipKeyGenerator(req.ip || 'unknown'),
+  handler: buildRateLimitHandler('Too many notification send requests. Please wait a moment before sending again.'),
 });
 
 /** /me/pets traffic is mobile-heavy and needs a separate ceiling from public reads */

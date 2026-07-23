@@ -130,6 +130,11 @@ const envSchema = z.object({
   CENTRAL_AUTH_JWT_PUBLIC_KEY: z.string().optional(),
   CENTRAL_AUTH_JWT_ISSUER: z.string().optional(),
   CENTRAL_AUTH_JWT_AUDIENCE: z.string().optional(),
+  // Comma-separated extra audiences accepted alongside CENTRAL_AUTH_JWT_AUDIENCE.
+  // Lets bpa_api tolerate Central Auth issuing under more than one client
+  // audience (e.g. during a client-id migration) without another env-only
+  // misconfiguration silently locking every user out of /me/*.
+  CENTRAL_AUTH_ADDITIONAL_JWT_AUDIENCES: z.string().optional(),
   CENTRAL_AUTH_JWT_ALGORITHM: z.enum(['HS256', 'RS256']).default('HS256'),
   FURTAIL_API_BASE_URL: z.string().url().default('http://localhost:7200/api/v1'),
   FURTAIL_API_TIMEOUT_MS: z.coerce.number().default(15000),
@@ -182,6 +187,19 @@ export const config = {
 };
 
 export const corsOrigins = config.CORS_ORIGINS.split(',').map((o) => o.trim());
+
+// All Central Auth audiences bpa_api will accept on incoming Bearer tokens.
+// Always includes the primary CENTRAL_AUTH_JWT_AUDIENCE plus any comma-separated
+// values in CENTRAL_AUTH_ADDITIONAL_JWT_AUDIENCES.
+const _centralAuthAudiences: string[] = [
+  config.CENTRAL_AUTH_JWT_AUDIENCE,
+  ...(config.CENTRAL_AUTH_ADDITIONAL_JWT_AUDIENCES?.split(',').map((a) => a.trim()).filter(Boolean) ?? []),
+].filter((a): a is string => Boolean(a));
+
+export const centralAuthAudiences: [string, ...string[]] | string | undefined =
+  _centralAuthAudiences.length > 1
+    ? (_centralAuthAudiences as [string, ...string[]])
+    : _centralAuthAudiences[0];
 
 const QR_SECRET_DEFAULT = 'bpa-qr-secret-change-in-production-min32chars!!';
 if (config.NODE_ENV === 'production' && config.QR_SECRET === QR_SECRET_DEFAULT) {

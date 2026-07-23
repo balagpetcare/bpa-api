@@ -261,4 +261,17 @@ describe('getPartnerClinics', () => {
     expect(args.orderBy).toEqual([{ sortOrder: 'asc' }, { name: 'asc' }]);
     expect(args.take).toBe(5);
   });
+
+  it('returns an empty array when the table has no rows (not an error)', async () => {
+    mockedPartnerClinicFindMany.mockResolvedValue([]);
+    const result = await getPartnerClinics({});
+    expect(result).toEqual([]);
+  });
+
+  it('propagates database errors (e.g. missing-table P2021) instead of swallowing them as an empty list', async () => {
+    const dbError = new Error('The table `public.partner_clinics` does not exist in the current database.');
+    mockedPartnerClinicFindMany.mockRejectedValue(dbError);
+
+    await expect(getPartnerClinics({})).rejects.toThrow(dbError);
+  });
 });

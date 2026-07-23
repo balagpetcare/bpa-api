@@ -4,6 +4,7 @@ import { uploadToStorage } from '../../storage/storage.service';
 import { AuditContext, auditCreate } from '../../utils/audit';
 import { MediaFileResponse } from './media.types';
 import * as repo from './media.repository';
+import { isValidUuid } from '../../utils/uuid';
 
 const DEFAULT_MAX_SIZE_MB = 200;
 const DEFAULT_ALLOWED_MIMES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'];
@@ -108,7 +109,10 @@ export async function uploadVideoFile(
     url,
   };
 
-  if (uploadedById) {
+  // See the matching comment in media.service.ts uploadFile(): Central
+  // Auth-issued ids aren't UUIDs and aren't rows in this table at all, so
+  // only attempt the local FK link when the id is actually UUID-shaped.
+  if (uploadedById && isValidUuid(uploadedById)) {
     const userExists = await prisma.user.findUnique({
       where: { id: uploadedById },
       select: { id: true },

@@ -461,8 +461,13 @@ export async function updateCampaign(id: string, dto: UpdateCampaignDto) {
   return prisma.campaign.update({ where: { id }, data, include: campaignInclude });
 }
 
-export async function updateCampaignStatus(id: string, status: CampaignStatus) {
-  return prisma.campaign.update({ where: { id }, data: { status }, include: campaignInclude });
+export async function updateCampaignStatus(
+  id: string,
+  status: CampaignStatus,
+  tx?: Prisma.TransactionClient,
+) {
+  const client = tx ?? prisma;
+  return client.campaign.update({ where: { id }, data: { status }, include: campaignInclude });
 }
 
 export async function deleteCampaign(id: string) {

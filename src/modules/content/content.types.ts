@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeExternalVideoUrl, normalizeVideoSourceType } from './video-source';
 
 export const ContentPostTypeSchema = z.enum([
   'VIDEO',
@@ -20,7 +21,7 @@ const PostBaseSchema = z.object({
   bodyBn: z.string().optional().nullable(),
   coverImageUrl: z.string().url().or(z.string().length(0)).optional().nullable(),
   thumbnailUrl: z.string().url().or(z.string().length(0)).optional().nullable(),
-  videoUrl: z.string().url().or(z.string().length(0)).optional().nullable(),
+  videoUrl: z.string().max(2000).optional().nullable(),
   videoProvider: z.string().max(50).optional().nullable(),
   videoSourceType: z.enum(['youtube', 'vimeo', 'upload']).optional().nullable(),
   videoFileUrl: z.string().optional().nullable(),
@@ -53,27 +54,44 @@ export const CreatePostSchema = PostBaseSchema.superRefine((data, ctx) => {
       });
     }
 
-    if (data.videoSourceType === 'youtube' && !data.videoUrl) {
+    const normalizedSourceType = normalizeVideoSourceType(data.videoSourceType);
+
+    if (normalizedSourceType === 'youtube' && !data.videoUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['videoUrl'],
-        message: 'YouTube URL is required when source type is YouTube',
+        message: 'YouTube URL or video ID is required when source type is YouTube',
       });
     }
 
-    if (data.videoSourceType === 'vimeo' && !data.videoUrl) {
+    if (normalizedSourceType === 'vimeo' && !data.videoUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['videoUrl'],
-        message: 'Vimeo URL is required when source type is Vimeo',
+        message: 'Vimeo URL or video ID is required when source type is Vimeo',
       });
     }
 
-    if (data.videoSourceType === 'upload' && !data.videoFileUrl && !data.videoFileKey) {
+    if (normalizedSourceType === 'upload' && !data.videoFileUrl && !data.videoFileKey) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['videoFileUrl'],
         message: 'Video file URL or key is required when source type is upload',
+      });
+    }
+
+    if (
+      (normalizedSourceType === 'youtube' || normalizedSourceType === 'vimeo') &&
+      data.videoUrl &&
+      !normalizeExternalVideoUrl(normalizedSourceType, data.videoUrl)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['videoUrl'],
+        message:
+          normalizedSourceType === 'youtube'
+            ? 'Enter a valid YouTube URL or video ID'
+            : 'Enter a valid Vimeo URL or video ID',
       });
     }
 
@@ -87,7 +105,7 @@ export const CreatePostSchema = PostBaseSchema.superRefine((data, ctx) => {
       }
 
       // Ensure at least one playable source exists
-      const hasPlayableSource = data.videoUrl || data.videoFileUrl;
+      const hasPlayableSource = data.videoUrl || data.videoFileUrl || data.videoFileKey;
       if (!hasPlayableSource) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

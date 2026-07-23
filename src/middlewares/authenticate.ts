@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
+import { verifyCentralAuthToken } from './requireCentralAuthUser';
 import { AppError } from '../utils/AppError';
 import { ERROR_CODES } from '../config/constants';
 import { config } from '../config';
@@ -23,8 +24,23 @@ export function authenticate(
     if (!token) {
       throw AppError.unauthorized('No token provided', ERROR_CODES.UNAUTHORIZED);
     }
-    const payload = verifyAccessToken(token);
-    req.user = payload;
+
+    // Tokens come from two disjoint issuers: bpa-api's own local login
+    // (issuer "bpa-api", audience "bpa-client") and WPA Central Auth
+    // (Global Super Admin SSO, issuer/audience from CENTRAL_AUTH_JWT_*).
+    // Try the local verification first (the common case), and only fall
+    // back to Central Auth verification if that fails — this keeps every
+    // existing local-login user completely unaffected.
+    try {
+      req.user = verifyAccessToken(token);
+    } catch (localErr) {
+      try {
+        const centralPayload = verifyCentralAuthToken(token);
+        req.user = { sub: centralPayload.sub, email: centralPayload.email, roles: centralPayload.roles ?? [] };
+      } catch {
+        throw localErr;
+      }
+    }
     next();
   } catch (err) {
     if (err instanceof AppError) return next(err);

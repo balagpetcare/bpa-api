@@ -1,11 +1,13 @@
 import sharp from 'sharp';
 import { prisma } from '../../database/prisma';
 import { AppError } from '../../utils/AppError';
+import { config } from '../../config';
 import { buildPaginationMeta, parsePaginationQuery } from '../../utils/response';
 import { AuditContext, auditCreate, auditUpdate, auditDelete } from '../../utils/audit';
 import { PaginationMeta } from '../../types';
 import { uploadToStorage, downloadFromStorage, uploadBufferToStorage, verifyFileExists } from '../../storage/storage.service';
 import { correctMimeType, getExtension, getFileCategory } from '../../utils/fileType';
+import { isValidUuid } from '../../utils/uuid';
 import * as repo from './media.repository';
 import { UpdateMediaDto, MediaListQuery, MediaFileResponse, CropMediaDto } from './media.types';
 import {
@@ -15,8 +17,39 @@ import {
 
 type RawFile = Awaited<ReturnType<typeof repo.findMediaById>>;
 
+// Dev-host variants that all resolve to *this same* locally-managed storage
+// backend (mirrors bpa_admin's resolveMediaUrl KNOWN_DEV_MEDIA_HOSTS list —
+// the two must stay in sync). Records whose url's host is one of these (or
+// this server's own configured BACKEND_URL/MEDIA_PUBLIC_BASE_URL host) are
+// genuinely "our" uploads, and the local-disk existence check applies.
+const LOCAL_STORAGE_HOST_PATTERN = /^(localhost|127\.0\.0\.1|10\.0\.2\.2|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$/i;
+
+export function isLocallyManagedUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (LOCAL_STORAGE_HOST_PATTERN.test(url.host)) return true;
+    for (const configured of [config.BACKEND_URL, config.MEDIA_PUBLIC_BASE_URL]) {
+      if (configured && url.host === new URL(configured).host) return true;
+    }
+    return false;
+  } catch {
+    // Not a parseable absolute URL at all — treat as a relative /uploads
+    // path, which is always locally managed.
+    return true;
+  }
+}
+
 function format(f: NonNullable<RawFile>): MediaFileResponse {
-  const isMissing = !verifyFileExists(f.filename);
+  // Some records (seed/demo data, or content deliberately pointing at a
+  // real external image host) were never uploaded to our own storage
+  // backend at all — their `url` is a genuine, independently-hosted
+  // absolute URL (e.g. placehold.co, images.unsplash.com). Running the
+  // local-disk existence check against `filename` for those always fails
+  // (there is no local file to find, by design) and incorrectly flagged
+  // them "File Missing" even though the URL itself is live and correct.
+  // Only apply the local-storage missing check to records that actually
+  // belong to this server's own managed storage.
+  const isMissing = isLocallyManagedUrl(f.url) ? !verifyFileExists(f.filename) : false;
   const nameForType = f.originalName || f.filename;
   const mimeType = correctMimeType(f.mimeType, nameForType);
 
@@ -72,7 +105,18 @@ export async function cropMedia(
     url,
   };
 
-  if (uploadedById) {
+  // `uploadedById` comes straight off the authenticated principal's JWT
+  // `sub` claim. For bpa_api's own local-login users that's always a real
+  // row id (a UUID, matching the `users.id @db.Uuid` column) — but Central
+  // Auth-issued tokens (Global Super Admin SSO) carry Central Auth's own
+  // user id format (a cuid, not a UUID, and not a row in this table at
+  // all). Passing a non-UUID straight into a `@db.Uuid` lookup used to
+  // surface as Prisma error P2023 ("Invalid data format in request"),
+  // blocking every Central Auth-authenticated upload. Only attempt the
+  // local-user FK link when the id is actually shaped like one of this
+  // table's own ids; Central Auth uploads are still recorded, just without
+  // a local `uploadedBy` relation (there is no local row to link to).
+  if (uploadedById && isValidUuid(uploadedById)) {
     const userExists = await prisma.user.findUnique({
       where: { id: uploadedById },
       select: { id: true },
@@ -148,7 +192,18 @@ export async function uploadFile(
     url,
   };
 
-  if (uploadedById) {
+  // `uploadedById` comes straight off the authenticated principal's JWT
+  // `sub` claim. For bpa_api's own local-login users that's always a real
+  // row id (a UUID, matching the `users.id @db.Uuid` column) — but Central
+  // Auth-issued tokens (Global Super Admin SSO) carry Central Auth's own
+  // user id format (a cuid, not a UUID, and not a row in this table at
+  // all). Passing a non-UUID straight into a `@db.Uuid` lookup used to
+  // surface as Prisma error P2023 ("Invalid data format in request"),
+  // blocking every Central Auth-authenticated upload. Only attempt the
+  // local-user FK link when the id is actually shaped like one of this
+  // table's own ids; Central Auth uploads are still recorded, just without
+  // a local `uploadedBy` relation (there is no local row to link to).
+  if (uploadedById && isValidUuid(uploadedById)) {
     const userExists = await prisma.user.findUnique({
       where: { id: uploadedById },
       select: { id: true },

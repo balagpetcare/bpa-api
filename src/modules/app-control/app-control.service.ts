@@ -14,6 +14,25 @@ import {
 type DestinationType = 'CAMPAIGN' | 'MEMBERSHIP' | 'DONATION' | 'PET_CENSUS' | 'SERVICE' | 'INTERNAL_PAGE' | 'EXTERNAL_URL' | 'NONE';
 type ContentStatus = 'draft' | 'published' | 'archived';
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * createdById/updatedById are FKs to bpa_api's own `User` table (@db.Uuid).
+ * BPA Admin's only real sign-in path is WPA Central Auth SSO — Global Super
+ * Admin principals authenticate there and have NO row in bpa_api's local
+ * `users` table, so req.user.sub for them is Central Auth's own id format
+ * (not a UUID, e.g. a cuid like "cm..."). Passing that straight to a
+ * `@db.Uuid` column throws Prisma P2023 ("Inconsistent column data"), which
+ * errorHandler.ts maps to a generic VALIDATION_ERROR — surfacing as a
+ * confusing "Invalid data format in request" on what looks like a normal
+ * content edit. Only attribute the actor when it's actually UUID-shaped;
+ * non-UUID actors (Central Auth admins) simply leave the audit FK null,
+ * exactly like an anonymous/system actor already does.
+ */
+function sanitizeActorId(actorId?: string): string | null {
+  return actorId && UUID_PATTERN.test(actorId) ? actorId : null;
+}
+
 type EntityConfig = {
   key: string;
   delegate: string;
@@ -133,11 +152,12 @@ function buildData(dto: Record<string, any>, actorId?: string, mode: 'create' | 
     ...(dto.releaseNotes !== undefined && { releaseNotes: dto.releaseNotes }),
   };
 
+  const safeActorId = sanitizeActorId(actorId);
   if (mode === 'create') {
-    base.createdById = actorId ?? null;
-    base.updatedById = actorId ?? null;
+    base.createdById = safeActorId;
+    base.updatedById = safeActorId;
   } else {
-    base.updatedById = actorId ?? null;
+    base.updatedById = safeActorId;
   }
   return base;
 }
@@ -152,8 +172,8 @@ async function writeAppAuditLog(entityType: string, entityId: string | null, act
       summary: `${action} ${entityType}`,
       payload: payload as Prisma.InputJsonValue | undefined,
       previousPayload: previousPayload as Prisma.InputJsonValue | undefined,
-      createdById: ctx.actorId ?? null,
-      updatedById: ctx.actorId ?? null,
+      createdById: sanitizeActorId(ctx.actorId),
+      updatedById: sanitizeActorId(ctx.actorId),
     },
   }).catch(() => {});
 }
@@ -209,7 +229,7 @@ export async function publishEntity(resource: string, id: string, dto: AppContro
   const status: ContentStatus = dto.published ? 'published' : 'draft';
   const row = await getDelegate(resource).update({
     where: { id },
-    data: { status, isActive: dto.published ? true : existing.isActive, updatedById: ctx.actorId ?? null },
+    data: { status, isActive: dto.published ? true : existing.isActive, updatedById: sanitizeActorId(ctx.actorId) },
   });
   await writeAppAuditLog(cfg.entityType, id, dto.published ? AuditAction.publish : AuditAction.unpublish, ctx, toRecord(row), toRecord(existing));
   return toRecord(row);
@@ -219,7 +239,7 @@ export async function reorderEntities(resource: string, dto: AppControlReorderDt
   const cfg = getConfig(resource);
   await prisma.$transaction(
     dto.items.map((item) =>
-      getDelegate(resource).update({ where: { id: item.id }, data: { sortOrder: item.sortOrder, updatedById: ctx.actorId ?? null } }),
+      getDelegate(resource).update({ where: { id: item.id }, data: { sortOrder: item.sortOrder, updatedById: sanitizeActorId(ctx.actorId) } }),
     ),
   );
   await writeAppAuditLog(cfg.entityType, null, AuditAction.update, ctx, { action: 'reorder', items: dto.items });

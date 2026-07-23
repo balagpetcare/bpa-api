@@ -53,6 +53,9 @@ export async function getMediaUsageReport(
     transparencyReportCovers,
     petPhotos,
     petCensusPhotos,
+    clinicOrgLogos,
+    clinicOrgCovers,
+    clinicBranchImages,
   ] = await Promise.all([
     db.campaignMedia.findMany({
       where: { mediaFileId },
@@ -147,6 +150,21 @@ export async function getMediaUsageReport(
       where: { photoMediaId: mediaFileId },
       select: { id: true, ownerName: true, petName: true, status: true },
       orderBy: { submittedAt: 'asc' },
+    }),
+    db.clinicOrganization.findMany({
+      where: { logoMediaId: mediaFileId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    db.clinicOrganization.findMany({
+      where: { coverMediaId: mediaFileId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    db.clinicBranchImage.findMany({
+      where: { mediaFileId },
+      select: { id: true, branch: { select: { id: true, branchName: true } } },
+      orderBy: { createdAt: 'asc' },
     }),
   ]);
 
@@ -282,6 +300,25 @@ export async function getMediaUsageReport(
         id: row.id,
         label: row.petName || row.ownerName,
         extra: { ownerName: row.ownerName, status: row.status },
+      })),
+    ),
+    compactReferences(
+      'clinic_org_logo',
+      'Clinic organization logo',
+      clinicOrgLogos.map((row) => ({ id: row.id, label: row.name })),
+    ),
+    compactReferences(
+      'clinic_org_cover',
+      'Clinic organization cover image',
+      clinicOrgCovers.map((row) => ({ id: row.id, label: row.name })),
+    ),
+    compactReferences(
+      'clinic_branch_image',
+      'Clinic branch gallery image',
+      clinicBranchImages.map((row) => ({
+        id: row.id,
+        label: row.branch.branchName,
+        extra: { branchId: row.branch.id },
       })),
     ),
   ].filter((value): value is MediaUsageReference => Boolean(value));

@@ -193,6 +193,8 @@ enum AuditAction {
   approve
   reject
   upload
+  archive
+  restore
 }
 
 enum AuthProvider {
@@ -492,6 +494,12 @@ model User {
   appTutorialGuidesUpdated                  AppTutorialGuide[]         @relation("AppTutorialGuideUpdatedBy")
   partnerClinicsCreated                     PartnerClinic[]            @relation("PartnerClinicCreatedBy")
   partnerClinicsUpdated                     PartnerClinic[]            @relation("PartnerClinicUpdatedBy")
+  clinicOrganizationsCreated                ClinicOrganization[]       @relation("ClinicOrganizationCreatedBy")
+  clinicOrganizationsUpdated                ClinicOrganization[]       @relation("ClinicOrganizationUpdatedBy")
+  clinicOrganizationsArchived               ClinicOrganization[]       @relation("ClinicOrganizationArchivedBy")
+  clinicBranchesCreated                     ClinicBranch[]             @relation("ClinicBranchCreatedBy")
+  clinicBranchesUpdated                     ClinicBranch[]             @relation("ClinicBranchUpdatedBy")
+  clinicBranchesArchived                    ClinicBranch[]             @relation("ClinicBranchArchivedBy")
   membershipCampaignsCreated                MembershipCampaign[]       @relation("MembershipCampaignCreatedBy")
   membershipCampaignsUpdated                MembershipCampaign[]       @relation("MembershipCampaignUpdatedBy")
   membershipApplications                    MembershipApplication[]
@@ -505,6 +513,13 @@ model User {
   membershipServiceUsagesReversed           MembershipServiceUsage[]   @relation("MembershipServiceUsageReversedBy")
   membershipUpgradesRequested               MembershipUpgrade[]        @relation("MembershipUpgradeRequestedByUser")
   membershipUpgradesReviewed                MembershipUpgrade[]        @relation("MembershipUpgradeReviewedByAdmin")
+  deviceInstallations                       DeviceInstallation[]
+  notificationPreference                    NotificationPreference?
+  userNotifications                         UserNotification[]
+  notificationCampaignsCreated              NotificationCampaign[]     @relation("NotificationCampaignCreatedBy")
+  notificationCampaignsApproved             NotificationCampaign[]     @relation("NotificationCampaignApprovedBy")
+  notificationTemplatesCreated              NotificationTemplate[]     @relation("NotificationTemplateCreatedBy")
+  notificationAutomationRulesCreated        NotificationAutomationRule[] @relation("NotificationAutomationRuleCreatedBy")
 
   @@map("users")
 }
@@ -1107,6 +1122,9 @@ model MediaFile {
   petCensusPhotos          PetCensusSubmission[]
   membershipMediaItems     MembershipMedia[]
   membershipDocuments      MembershipDocument[]
+  clinicOrgLogos           ClinicOrganization[]  @relation("ClinicOrgLogoMedia")
+  clinicOrgCovers          ClinicOrganization[]  @relation("ClinicOrgCoverMedia")
+  clinicBranchImages       ClinicBranchImage[]
 
   @@index([mimeType])
   @@map("media_files")
@@ -4362,6 +4380,341 @@ model PartnerClinic {
   @@map("partner_clinics")
 }
 
+// ─── Clinic Directory (organizations + branches) ─────────────────────────
+// Enterprise clinic directory used by the "Find Clinics" feature. Replaces
+// the flat `PartnerClinic` model's role for new data: an organization (e.g.
+// a clinic chain or a single independent clinic) owns one or more physical
+// branches, so branches sharing a phone number or an organization name
+// remain distinct rows — never deduplicated away.
+
+/// Tri-state for facts the source data may simply not report (e.g. whether a
+/// branch offers 24-hour service). UNKNOWN must never be coerced to NO —
+/// "we don't know" and "confirmed not available" are different facts.
+enum TriState {
+  UNKNOWN
+  YES
+  NO
+}
+
+enum ClinicVerificationStatus {
+  UNKNOWN
+  UNVERIFIED
+  VERIFIED
+  REJECTED
+}
+
+enum ClinicClaimStatus {
+  UNCLAIMED
+  PENDING
+  CLAIMED
+}
+
+enum ClinicFacilityType {
+  LABORATORY
+  SURGERY
+  IMAGING
+  PHARMACY
+  HOSPITALIZATION
+  HOME_SERVICE
+}
+
+enum ClinicAnimalType {
+  DOG
+  CAT
+  BIRD
+  RABBIT
+  REPTILE
+  SMALL_MAMMAL
+  EXOTIC
+  OTHER
+}
+
+enum ClinicSocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  YOUTUBE
+  TIKTOK
+  WEBSITE
+  OTHER
+}
+
+model ClinicOrganization {
+  id                 String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String                   @db.VarChar(255)
+  slug               String                   @unique @db.VarChar(280)
+  description        String?                  @db.Text
+  // Legacy plain-URL fields — kept exactly as-is for backward compatibility
+  // with records saved before the Central Media Library picker existed.
+  // Never overwritten automatically; a record can have BOTH a legacy URL
+  // and a `logoMediaId`/`coverMediaId` set. `logoMedia`/`coverMedia` (when
+  // present) is always the source of truth for the currently displayed
+  // image — the legacy field is only a fallback.
+  logoUrl            String?                  @map("logo_url") @db.Text
+  coverImageUrl      String?                  @map("cover_image_url") @db.Text
+  logoMediaId        String?                  @map("logo_media_id") @db.Uuid
+  coverMediaId       String?                  @map("cover_media_id") @db.Uuid
+  website            String?                  @db.Text
+  email              String?                  @db.VarChar(255)
+  verificationStatus ClinicVerificationStatus @default(UNKNOWN) @map("verification_status")
+  claimedStatus      ClinicClaimStatus        @default(UNCLAIMED) @map("claimed_status")
+  published          Boolean                  @default(false)
+  featured           Boolean                  @default(false)
+  // Soft "removed from normal view" state, distinct from `published`. An
+  // archived organization is always treated as unpublished by public-facing
+  // endpoints regardless of the `published` flag, but — unlike a hard
+  // delete — can be restored without data loss. Permanent deletion (Prisma
+  // `.delete()`) remains a separate, GLOBAL_SUPER_ADMIN-only operation.
+  archivedAt         DateTime?                @map("archived_at") @db.Timestamptz
+  archivedById       String?                  @map("archived_by_id") @db.Uuid
+  createdById        String?                  @map("created_by_id") @db.Uuid
+  updatedById        String?                  @map("updated_by_id") @db.Uuid
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+
+  branches    ClinicBranch[]
+  socialLinks ClinicOrganizationSocialLink[]
+  createdBy   User?                          @relation("ClinicOrganizationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?                          @relation("ClinicOrganizationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  archivedBy  User?                          @relation("ClinicOrganizationArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  // SetNull (not Cascade/Restrict): deleting a MediaFile row must never take
+  // down the clinic record itself — only clear the reference back to the
+  // legacy URL fallback. media-usage.service.ts's in-use check is the real
+  // guard against deleting a MediaFile that's currently selected here.
+  logoMedia   MediaFile?                     @relation("ClinicOrgLogoMedia", fields: [logoMediaId], references: [id], onDelete: SetNull)
+  coverMedia  MediaFile?                     @relation("ClinicOrgCoverMedia", fields: [coverMediaId], references: [id], onDelete: SetNull)
+
+  @@index([published, featured])
+  @@index([verificationStatus])
+  @@index([archivedAt])
+  @@index([logoMediaId])
+  @@index([coverMediaId])
+  @@map("clinic_organizations")
+}
+
+model ClinicOrganizationSocialLink {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  platform       ClinicSocialPlatform
+  url            String               @db.Text
+  label          String?              @db.VarChar(120)
+
+  organization ClinicOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("clinic_organization_social_links")
+}
+
+model ClinicBranch {
+  id                    String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String                   @map("organization_id") @db.Uuid
+  branchName            String                   @map("branch_name") @db.VarChar(255)
+  // Public-facing identity for this branch (distinct from the organization's
+  // own slug) — e.g. `mewmew-pet-care-banasree`. Generated at create/import
+  // time; never derived on the fly so a branch's public URL stays stable
+  // even if its name is edited later.
+  slug                  String?                  @unique @db.VarChar(320)
+  address               String?                  @db.Text
+  area                  String?                  @db.VarChar(160)
+  cityCorporation       String?                  @map("city_corporation") @db.VarChar(120)
+  district              String?                  @db.VarChar(120)
+  postalCode            String?                  @map("postal_code") @db.VarChar(20)
+  latitude              Decimal?                 @db.Decimal(9, 6)
+  longitude             Decimal?                 @db.Decimal(9, 6)
+  googleMapUrl          String?                  @map("google_map_url") @db.Text
+  email                 String?                  @db.VarChar(255)
+  // IANA zone used to compute "open now" — defaults to the only timezone
+  // today's data covers; a real column (not a hardcoded constant) so a
+  // future branch outside Bangladesh is not silently evaluated in the
+  // wrong timezone.
+  timezone              String                   @default("Asia/Dhaka") @db.VarChar(64)
+  emergencyAvailability TriState                 @default(UNKNOWN) @map("emergency_availability")
+  open24Hours           TriState                 @default(UNKNOWN) @map("open_24_hours")
+  appointmentRequired   TriState                 @default(UNKNOWN) @map("appointment_required")
+  accessibilityNotes    String?                  @map("accessibility_notes") @db.Text
+  verificationStatus    ClinicVerificationStatus @default(UNKNOWN) @map("verification_status")
+  lastVerifiedAt        DateTime?                @map("last_verified_at") @db.Timestamptz
+  published             Boolean                  @default(false)
+  // See ClinicOrganization.archivedAt for the archive/restore contract.
+  archivedAt            DateTime?                @map("archived_at") @db.Timestamptz
+  archivedById          String?                  @map("archived_by_id") @db.Uuid
+  // Import bookkeeping — preserves the raw Excel "Notes" cell verbatim and
+  // provides an idempotency key so re-running the importer against the same
+  // source workbook updates existing branches instead of duplicating them.
+  importNotes           String?                  @map("import_notes") @db.Text
+  importKey             String?                  @unique @map("import_key") @db.VarChar(500)
+  createdById           String?                  @map("created_by_id") @db.Uuid
+  updatedById           String?                  @map("updated_by_id") @db.Uuid
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization ClinicOrganization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                      @relation("ClinicBranchCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?                      @relation("ClinicBranchUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  archivedBy   User?                      @relation("ClinicBranchArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  phones       ClinicBranchPhone[]
+  socialLinks  ClinicBranchSocialLink[]
+  openingHours ClinicBranchOpeningHours[]
+  closures     ClinicBranchClosure[]
+  services     ClinicBranchService[]
+  animalTypes  ClinicBranchAnimalType[]
+  facilities   ClinicBranchFacility[]
+  images       ClinicBranchImage[]
+  sources      ClinicBranchSource[]
+
+  @@index([organizationId])
+  @@index([published])
+  @@index([verificationStatus])
+  @@index([area])
+  @@index([district])
+  @@index([archivedAt])
+  @@map("clinic_branches")
+}
+
+model ClinicBranchPhone {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId          String   @map("branch_id") @db.Uuid
+  phoneNumber       String   @map("phone_number") @db.VarChar(20)
+  label             String?  @db.VarChar(80)
+  isPrimary         Boolean  @default(false) @map("is_primary")
+  whatsappAvailable TriState @default(UNKNOWN) @map("whatsapp_available")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  branch ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, phoneNumber])
+  @@index([branchId])
+  @@map("clinic_branch_phones")
+}
+
+model ClinicBranchSocialLink {
+  id       String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId String               @map("branch_id") @db.Uuid
+  platform ClinicSocialPlatform
+  url      String               @db.Text
+  label    String?              @db.VarChar(120)
+
+  branch ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+  @@map("clinic_branch_social_links")
+}
+
+model ClinicBranchOpeningHours {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId  String  @map("branch_id") @db.Uuid
+  dayOfWeek Int     @map("day_of_week")
+  opensAt   String? @map("opens_at") @db.VarChar(5)
+  closesAt  String? @map("closes_at") @db.VarChar(5)
+  isClosed  Boolean @default(false) @map("is_closed")
+  note      String? @db.Text
+
+  branch ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, dayOfWeek])
+  @@index([branchId])
+  @@map("clinic_branch_opening_hours")
+}
+
+model ClinicBranchClosure {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId  String    @map("branch_id") @db.Uuid
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  reason    String?   @db.Text
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  branch ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+  @@map("clinic_branch_closures")
+}
+
+model ClinicBranchService {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId    String  @map("branch_id") @db.Uuid
+  serviceName String  @map("service_name") @db.VarChar(160)
+  notes       String? @db.Text
+
+  branch ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, serviceName])
+  @@index([branchId])
+  @@map("clinic_branch_services")
+}
+
+model ClinicBranchAnimalType {
+  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId   String           @map("branch_id") @db.Uuid
+  animalType ClinicAnimalType @map("animal_type")
+  note       String?          @db.Text
+
+  branch ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, animalType])
+  @@index([branchId])
+  @@map("clinic_branch_animal_types")
+}
+
+model ClinicBranchFacility {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId     String             @map("branch_id") @db.Uuid
+  facilityType ClinicFacilityType @map("facility_type")
+  available    TriState           @default(UNKNOWN)
+  notes        String?            @db.Text
+
+  branch ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, facilityType])
+  @@index([branchId])
+  @@map("clinic_branch_facilities")
+}
+
+model ClinicBranchImage {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId    String   @map("branch_id") @db.Uuid
+  // Always populated (kept in sync with `mediaFile.url` when a Media
+  // Library asset is selected) so every existing consumer of this row that
+  // only reads `url` keeps working unchanged. `mediaFileId` is the durable
+  // reference used by the Media Library picker's "already selected"
+  // highlighting and by the in-use check that blocks deleting a media file
+  // that's still someone's clinic gallery image.
+  url         String   @db.Text
+  mediaFileId String?  @map("media_file_id") @db.Uuid
+  isCover     Boolean  @default(false) @map("is_cover")
+  sortOrder   Int      @default(0) @map("sort_order")
+  altText     String?  @map("alt_text") @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  branch    ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  mediaFile MediaFile?   @relation(fields: [mediaFileId], references: [id], onDelete: SetNull)
+
+  // NULLs are distinct in a Postgres unique index, so this allows any number
+  // of legacy rows with mediaFileId = NULL while still preventing the same
+  // Media Library asset from being added twice to one branch's gallery.
+  @@unique([branchId, mediaFileId])
+  @@index([branchId])
+  @@index([mediaFileId])
+  @@map("clinic_branch_images")
+}
+
+/// One row per source URL cited for a branch record (e.g. the directory
+/// blog posts the Excel import was compiled from). Kept separate from
+/// `ClinicBranch.importNotes` so multiple sources can be preserved per
+/// branch without conflating them into one text blob.
+model ClinicBranchSource {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId  String   @map("branch_id") @db.Uuid
+  sourceUrl String   @map("source_url") @db.Text
+  label     String?  @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  branch ClinicBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+  @@map("clinic_branch_sources")
+}
+
 model AppAuditLog {
   id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   entityType      String      @map("entity_type") @db.VarChar(80)
@@ -4401,4 +4754,296 @@ model CampaignVideo {
 
   @@index([campaignId])
   @@map("campaign_videos")
+}
+
+// --- Push Notification System ---
+
+enum DevicePlatform {
+  android
+  ios
+  web
+}
+
+enum NotificationCategory {
+  pet_health
+  campaign
+  video
+  post
+  membership
+  booking
+  payment
+  certificate
+  account
+  emergency
+  promotional
+}
+
+enum NotificationChannel {
+  push
+  in_app
+  push_and_in_app
+}
+
+enum OutboxEventStatus {
+  pending
+  processing
+  sent
+  failed
+  dead_letter
+}
+
+enum NotificationCampaignStatus {
+  draft
+  pending_approval
+  scheduled
+  sending
+  sent
+  cancelled
+  failed
+}
+
+enum NotificationAudienceType {
+  all_users
+  segment
+}
+
+enum UserNotificationStatus {
+  unread
+  read
+  archived
+}
+
+enum NotificationDeliveryStatus {
+  pending
+  sent
+  delivered
+  failed
+  invalid_token
+}
+
+enum NotificationAutomationTrigger {
+  domain_event
+  pet_reminder_schedule
+}
+
+model DeviceInstallation {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  installationId String         @unique @map("installation_id") @db.VarChar(255)
+  fcmToken       String?        @map("fcm_token") @db.Text
+  platform       DevicePlatform
+  appVersion     String?        @map("app_version") @db.VarChar(40)
+  osVersion      String?        @map("os_version") @db.VarChar(40)
+  locale         String         @default("en") @db.VarChar(10)
+  timezone       String         @default("Asia/Dhaka") @db.VarChar(60)
+  isActive       Boolean        @default(true) @map("is_active")
+  lastSeenAt     DateTime       @default(now()) @map("last_seen_at") @db.Timestamptz
+  tokenUpdatedAt DateTime?      @map("token_updated_at") @db.Timestamptz
+  invalidatedAt  DateTime?      @map("invalidated_at") @db.Timestamptz
+  loggedOutAt    DateTime?      @map("logged_out_at") @db.Timestamptz
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, isActive])
+  @@index([fcmToken])
+  @@map("device_installations")
+}
+
+model NotificationTemplate {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key             String               @unique @db.VarChar(120)
+  category        NotificationCategory
+  title           String               @db.VarChar(255)
+  titleBn         String?              @map("title_bn") @db.VarChar(255)
+  body            String               @db.Text
+  bodyBn          String?              @map("body_bn") @db.Text
+  imageUrl        String?              @map("image_url") @db.Text
+  deepLink        String?              @map("deep_link") @db.VarChar(500)
+  defaultPriority NotificationPriority @default(normal) @map("default_priority")
+  isActive        Boolean              @default(true) @map("is_active")
+  createdById     String?              @map("created_by") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  createdBy       User?                         @relation("NotificationTemplateCreatedBy", fields: [createdById], references: [id])
+  automationRules NotificationAutomationRule[]
+  campaigns       NotificationCampaign[]
+
+  @@index([category])
+  @@map("notification_templates")
+}
+
+model NotificationOutboxEvent {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventType     String            @map("event_type") @db.VarChar(80)
+  entityType    String?           @map("entity_type") @db.VarChar(60)
+  entityId      String?           @map("entity_id") @db.VarChar(255)
+  dedupeKey     String            @unique @map("dedupe_key") @db.VarChar(255)
+  payload       Json
+  status        OutboxEventStatus @default(pending)
+  attempts      Int               @default(0)
+  maxAttempts   Int               @default(5) @map("max_attempts")
+  nextAttemptAt DateTime          @default(now()) @map("next_attempt_at") @db.Timestamptz
+  lastError     String?           @map("last_error") @db.Text
+  processedAt   DateTime?         @map("processed_at") @db.Timestamptz
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([status, nextAttemptAt])
+  @@index([eventType])
+  @@map("notification_outbox_events")
+}
+
+model NotificationCampaign {
+  id             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId     String?                    @map("template_id") @db.Uuid
+  title          String                     @db.VarChar(255)
+  titleBn        String?                    @map("title_bn") @db.VarChar(255)
+  body           String                     @db.Text
+  bodyBn         String?                    @map("body_bn") @db.Text
+  imageUrl       String?                    @map("image_url") @db.Text
+  deepLink       String?                    @map("deep_link") @db.VarChar(500)
+  category       NotificationCategory
+  priority       NotificationPriority       @default(normal)
+  channel        NotificationChannel        @default(push_and_in_app)
+  audienceType   NotificationAudienceType   @default(all_users) @map("audience_type")
+  audienceFilter Json?                      @map("audience_filter")
+  estimatedReach Int?                       @map("estimated_reach")
+  status         NotificationCampaignStatus @default(draft)
+  scheduledAt    DateTime?                  @map("scheduled_at") @db.Timestamptz
+  expiresAt      DateTime?                  @map("expires_at") @db.Timestamptz
+  sentAt         DateTime?                  @map("sent_at") @db.Timestamptz
+  cancelledAt    DateTime?                  @map("cancelled_at") @db.Timestamptz
+  createdById    String                     @map("created_by") @db.Uuid
+  approvedById   String?                    @map("approved_by") @db.Uuid
+  approvedAt     DateTime?                  @map("approved_at") @db.Timestamptz
+  targetedCount  Int                        @default(0) @map("targeted_count")
+  attemptedCount Int                        @default(0) @map("attempted_count")
+  acceptedCount  Int                        @default(0) @map("accepted_count")
+  failedCount    Int                        @default(0) @map("failed_count")
+  openedCount    Int                        @default(0) @map("opened_count")
+  clickedCount   Int                        @default(0) @map("clicked_count")
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime                   @updatedAt @map("updated_at") @db.Timestamptz
+
+  template   NotificationTemplate? @relation(fields: [templateId], references: [id])
+  createdBy  User                  @relation("NotificationCampaignCreatedBy", fields: [createdById], references: [id])
+  approvedBy User?                 @relation("NotificationCampaignApprovedBy", fields: [approvedById], references: [id])
+
+  userNotifications UserNotification[]
+  deliveries        NotificationDelivery[]
+
+  @@index([status, scheduledAt])
+  @@index([createdById])
+  @@map("notification_campaigns")
+}
+
+model UserNotification {
+  id         String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String                 @map("user_id") @db.Uuid
+  campaignId String?                @map("campaign_id") @db.Uuid
+  eventType  String?                @map("event_type") @db.VarChar(80)
+  entityType String?                @map("entity_type") @db.VarChar(60)
+  entityId   String?                @map("entity_id") @db.VarChar(255)
+  category   NotificationCategory
+  priority   NotificationPriority   @default(normal)
+  title      String                 @db.VarChar(255)
+  titleBn    String?                @map("title_bn") @db.VarChar(255)
+  body       String                 @db.Text
+  bodyBn     String?                @map("body_bn") @db.Text
+  imageUrl   String?                @map("image_url") @db.Text
+  deepLink   String?                @map("deep_link") @db.VarChar(500)
+  dedupeKey  String?                @map("dedupe_key") @db.VarChar(255)
+  status     UserNotificationStatus @default(unread)
+  readAt     DateTime?              @map("read_at") @db.Timestamptz
+  archivedAt DateTime?              @map("archived_at") @db.Timestamptz
+  openedAt   DateTime?              @map("opened_at") @db.Timestamptz
+  expiresAt  DateTime?              @map("expires_at") @db.Timestamptz
+  createdAt  DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign NotificationCampaign? @relation(fields: [campaignId], references: [id])
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, status, createdAt])
+  @@index([userId, category])
+  @@index([campaignId])
+  @@map("user_notifications")
+}
+
+model NotificationDelivery {
+  id                 String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId         String?                    @map("campaign_id") @db.Uuid
+  userNotificationId String?                    @map("user_notification_id") @db.Uuid
+  deviceId           String?                    @map("device_id") @db.Uuid
+  userId             String                     @map("user_id") @db.Uuid
+  status             NotificationDeliveryStatus @default(pending)
+  providerMessageId  String?                    @map("provider_message_id") @db.VarChar(255)
+  retryCount         Int                        @default(0) @map("retry_count")
+  maxRetries         Int                        @default(5) @map("max_retries")
+  lastError          String?                    @map("last_error") @db.Text
+  sentAt             DateTime?                  @map("sent_at") @db.Timestamptz
+  deliveredAt        DateTime?                  @map("delivered_at") @db.Timestamptz
+  failedAt           DateTime?                  @map("failed_at") @db.Timestamptz
+  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime                   @updatedAt @map("updated_at") @db.Timestamptz
+
+  campaign NotificationCampaign? @relation(fields: [campaignId], references: [id])
+  device   DeviceInstallation?   @relation(fields: [deviceId], references: [id])
+
+  @@index([campaignId, status])
+  @@index([status, retryCount])
+  @@index([userId])
+  @@map("notification_deliveries")
+}
+
+model NotificationPreference {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String   @unique @map("user_id") @db.Uuid
+  petHealthEnabled   Boolean  @default(true) @map("pet_health_enabled")
+  campaignEnabled    Boolean  @default(true) @map("campaign_enabled")
+  videoEnabled       Boolean  @default(true) @map("video_enabled")
+  membershipEnabled  Boolean  @default(true) @map("membership_enabled")
+  bookingEnabled     Boolean  @default(true) @map("booking_enabled")
+  promotionalEnabled Boolean  @default(true) @map("promotional_enabled")
+  pushEnabled        Boolean  @default(true) @map("push_enabled")
+  inAppEnabled       Boolean  @default(true) @map("in_app_enabled")
+  quietHoursEnabled  Boolean  @default(false) @map("quiet_hours_enabled")
+  quietHoursStart    String?  @map("quiet_hours_start") @db.VarChar(5)
+  quietHoursEnd      String?  @map("quiet_hours_end") @db.VarChar(5)
+  language           String   @default("en") @db.VarChar(10)
+  timezone           String   @default("Asia/Dhaka") @db.VarChar(60)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model NotificationAutomationRule {
+  id          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String                        @db.VarChar(160)
+  triggerType NotificationAutomationTrigger @map("trigger_type")
+  eventType   String?                       @map("event_type") @db.VarChar(80)
+  offsetDays  Int?                          @map("offset_days")
+  templateId  String                        @map("template_id") @db.Uuid
+  category    NotificationCategory
+  priority    NotificationPriority          @default(normal)
+  isActive    Boolean                       @default(true) @map("is_active")
+  lastRunAt   DateTime?                     @map("last_run_at") @db.Timestamptz
+  createdById String?                       @map("created_by") @db.Uuid
+  createdAt   DateTime                      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime                      @updatedAt @map("updated_at") @db.Timestamptz
+
+  template  NotificationTemplate @relation(fields: [templateId], references: [id])
+  createdBy User?                @relation("NotificationAutomationRuleCreatedBy", fields: [createdById], references: [id])
+
+  @@index([triggerType, isActive])
+  @@index([eventType])
+  @@map("notification_automation_rules")
 }

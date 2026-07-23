@@ -13,6 +13,17 @@ export const mediaListQuerySchema = z.object({
   mimeType: z.string().optional(),
 });
 
+// Validates the `:id` route param on GET/PATCH/DELETE /admin/media/:id and
+// POST /:id/crop before it ever reaches Prisma. Without this, a non-UUID id
+// (e.g. a URL passed where an id was expected) hits `mediaFile.findUnique`
+// directly, Postgres rejects the invalid uuid literal, and Prisma surfaces
+// it as error code P2023 — which the global error handler maps to a
+// generic, confusing "Invalid data format in request" / VALIDATION_ERROR
+// response. Rejecting the bad id here instead gives a clean, honest 400.
+export const mediaIdParamSchema = z.object({
+  id: z.string().uuid('Media id must be a valid UUID.'),
+});
+
 export const cropMediaSchema = z.object({
   x: z.number(),
   y: z.number(),

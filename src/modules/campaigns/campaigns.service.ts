@@ -5,6 +5,7 @@ import { prisma } from '../../database/prisma';
 import * as repo from './campaigns.repository';
 import * as locationRepo from '../locations/locations.repository';
 import { getCampaignLiveStats } from './campaigns.stats';
+import { publishOutboxEvent, enqueueIfNew } from '../push-notifications/outbox';
 import {
   deleteCampaignAndCollectOrphanMedia,
   performDeferredStorageCleanup,
@@ -54,9 +55,11 @@ export async function getCampaign(id: string) {
   return { ...c, stats };
 }
 
+const CAMPAIGN_UPDATE_NOTIFY_FIELDS = ['startDate', 'endDate', 'registrationOpenAt', 'registrationCloseAt'] as const;
+
 export async function updateCampaign(id: string, dto: UpdateCampaignDto) {
   const campaign = await getCampaign(id);
-  
+
   if (dto.slug && dto.slug !== campaign.slug) {
     const existing = await prisma.campaign.findFirst({ where: { slug: dto.slug, id: { not: id } } });
     if (existing) throw AppError.conflict('Campaign with this slug already exists');
@@ -64,13 +67,75 @@ export async function updateCampaign(id: string, dto: UpdateCampaignDto) {
 
   // Removed restriction: Only draft campaigns can be edited.
   // This allows fixing mistakes even after a campaign is published or registration is open.
-  return repo.updateCampaign(id, dto);
+  const updated = await repo.updateCampaign(id, dto);
+
+  // Only notify for already-published campaigns (never drafts) and only when
+  // a field registrants actually care about (schedule) changed — not every
+  // save. Dedupe collapses same-day repeated edits into a single notification.
+  const isPublished = campaign.status !== 'draft';
+  const touchedNotifyField = CAMPAIGN_UPDATE_NOTIFY_FIELDS.some((f) => dto[f] !== undefined);
+  if (isPublished && touchedNotifyField) {
+    const dayBucket = new Date().toISOString().slice(0, 10);
+    const registrants = await prisma.campaignRegistration.findMany({
+      where: { campaignId: id, status: { notIn: ['cancelled', 'pending_payment'] } },
+      select: { owner: { select: { userId: true } } },
+    });
+    const userIds = [...new Set(registrants.map((r) => r.owner.userId).filter((v): v is string => !!v))];
+    if (userIds.length > 0) {
+      const result = await publishOutboxEvent({
+        eventType: 'CAMPAIGN_UPDATED',
+        entityType: 'campaign',
+        entityId: id,
+        dedupeKey: `campaign_updated:${id}:${dayBucket}`,
+        payload: {
+          category: 'campaign',
+          priority: 'normal',
+          title: `${updated.title} has been updated`,
+          titleBn: `${updated.title} আপডেট করা হয়েছে`,
+          body: 'Campaign schedule details have changed. Tap to view the latest information.',
+          bodyBn: 'ক্যাম্পেইনের সময়সূচী পরিবর্তিত হয়েছে। সর্বশেষ তথ্য দেখতে ট্যাপ করুন।',
+          deepLink: `bpa://campaigns/${id}`,
+          targetUserIds: userIds,
+        },
+      });
+      await enqueueIfNew(result);
+    }
+  }
+
+  return updated;
 }
 
 export async function publishCampaign(id: string) {
   const campaign = await getCampaign(id);
   if (campaign.status !== CampaignStatus.draft) throw AppError.badRequest('Campaign must be in draft to publish');
-  return repo.updateCampaignStatus(id, CampaignStatus.published);
+
+  const [updated, outboxResult] = await prisma.$transaction(async (tx) => {
+    const updatedCampaign = await repo.updateCampaignStatus(id, CampaignStatus.published, tx);
+    const result = await publishOutboxEvent(
+      {
+        eventType: 'CAMPAIGN_PUBLISHED',
+        entityType: 'campaign',
+        entityId: id,
+        dedupeKey: `campaign_published:${id}`,
+        payload: {
+          category: 'campaign',
+          priority: 'normal',
+          title: `New campaign: ${updatedCampaign.title}`,
+          titleBn: `নতুন ক্যাম্পেইন: ${updatedCampaign.title}`,
+          body: 'A new campaign has been published. Tap to view details and register.',
+          bodyBn: 'একটি নতুন ক্যাম্পেইন প্রকাশিত হয়েছে। বিস্তারিত দেখতে এবং নিবন্ধন করতে ট্যাপ করুন।',
+          imageUrl: updatedCampaign.coverImage?.url,
+          deepLink: `bpa://campaigns/${id}`,
+          targetAll: true,
+        },
+      },
+      tx,
+    );
+    return [updatedCampaign, result] as const;
+  });
+
+  await enqueueIfNew(outboxResult);
+  return updated;
 }
 
 export async function openRegistration(id: string) {

@@ -82,6 +82,8 @@ import {
 } from './modules/community-membership/community-membership.controller';
 import { mePetsLimiter, publicReadLimiter } from './middlewares/rateLimiter';
 import notificationsRouter from './modules/notifications/notifications.router';
+import pushNotificationsRouter from './modules/push-notifications/push-notifications.router';
+import adminPushNotificationsRouter from './modules/admin-push-notifications/admin-push-notifications.router';
 import dashboardRouter from './modules/dashboard/dashboard.router';
 import { contentPublicRouter, contentAuthenticatedRouter, contentAdminRouter } from './modules/content/content.router';
 import publicAnalyticsRouter from './modules/analytics/analytics-public.router';
@@ -92,6 +94,9 @@ import { campaignParticipantsRouter } from './modules/campaign-participants/part
 import { appControlAdminRouter } from './modules/app-control/app-control.router';
 import appPublicRouter from './modules/app/app.router';
 import partnerClinicsAdminRouter from './modules/partner-clinics/partner-clinics.router';
+import clinicsAdminRouter from './modules/clinics/clinics.router';
+import clinicImportAdminRouter from './modules/clinics/clinic-import.router';
+import clinicsPublicRouter from './modules/clinics/clinics-public.router';
 
 const app = express();
 
@@ -232,6 +237,9 @@ app.use(`${v1}/admin/analytics/campaigns`, campaignAnalyticsRouter);
 app.use(`${v1}/admin/homepage`, homepageAdminRouter);
 app.use(`${v1}/admin/app-control`, appControlAdminRouter);
 app.use(`${v1}/admin/partner-clinics`, partnerClinicsAdminRouter);
+app.use(`${v1}/admin/clinics`, clinicsAdminRouter);
+app.use(`${v1}/admin/clinics/import`, clinicImportAdminRouter);
+app.use(`${v1}/public/clinics`, clinicsPublicRouter);
 app.use(`${v1}/app`, appPublicRouter);
 app.use(`${v1}/homepage`, homepagePublicRouter);
 
@@ -302,6 +310,8 @@ app.use(`${v1}/clinic/memberships`, membershipCampaignClinicRouter);
 
 // ─── Admin Notification & Dashboard ────────────────────────────
 app.use(`${v1}/admin/notifications`, notificationsRouter);
+app.use(`${v1}/notifications`, pushNotificationsRouter);
+app.use(`${v1}/admin/push-notifications`, adminPushNotificationsRouter);
 app.use(`${v1}/admin/dashboard`, dashboardRouter);
 
 // ─── Error Handling ─────────────────────────────────────────────

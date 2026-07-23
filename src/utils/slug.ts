@@ -45,6 +45,30 @@ export async function uniqueTagSlug(name: string, excludeId?: string): Promise<s
   });
 }
 
+export async function uniqueClinicOrganizationSlug(name: string, excludeId?: string): Promise<string> {
+  return uniqueSlug(name, async (candidate) => {
+    const existing = await prisma.clinicOrganization.findFirst({
+      where: { slug: candidate, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    });
+    return !!existing;
+  });
+}
+
+/** Branch slugs are seeded from the parent organization's slug plus the
+ * branch's own area/name so two branches of the same org never collide. */
+export async function uniqueClinicBranchSlug(
+  organizationSlug: string,
+  branchSeed: string,
+  excludeId?: string,
+): Promise<string> {
+  return uniqueSlug(`${organizationSlug}-${branchSeed}`, async (candidate) => {
+    const existing = await prisma.clinicBranch.findFirst({
+      where: { slug: candidate, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    });
+    return !!existing;
+  });
+}
+
 async function uniqueSlug(
   text: string,
   checkExists: (slug: string) => Promise<boolean>,

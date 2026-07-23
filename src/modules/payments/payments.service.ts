@@ -7,6 +7,89 @@ import { settleCampaignPayment, cancelCampaignPayment } from '../campaign-regist
 import { settleDonationPayment, cancelDonationPayment } from '../donations/donations.service';
 import { issueCarePartnerCardOnPayment } from '../care-partner-cards/care-partner-cards.service';
 import { config } from '../../config';
+import { publishOutboxEvent, enqueueIfNew } from '../push-notifications/outbox';
+
+// Payment notifications never include the amount or gateway reference —
+// financial detail stays in the authenticated payment history screen, not
+// in a push payload that can appear on a lock screen. Full detail lives on
+// the corresponding UserNotification row for in-app viewing.
+async function notifyPaymentOutcome(paymentId: string, outcome: 'success' | 'failed'): Promise<void> {
+  try {
+    const registration = await prisma.campaignRegistration.findFirst({
+      where: { paymentId },
+      select: {
+        id: true,
+        campaignId: true,
+        campaign: { select: { title: true } },
+        owner: { select: { userId: true } },
+      },
+    });
+
+    const userId = registration?.owner.userId;
+    if (!userId) return; // guest booking or payment not linked to a known user — nothing to notify
+
+    if (outcome === 'success') {
+      const result = await publishOutboxEvent({
+        eventType: 'PAYMENT_SUCCESS',
+        entityType: 'payment',
+        entityId: paymentId,
+        dedupeKey: `payment_success:${paymentId}`,
+        payload: {
+          category: 'payment',
+          priority: 'normal',
+          title: 'Payment successful',
+          titleBn: 'পেমেন্ট সফল হয়েছে',
+          body: 'Your payment was received successfully. Tap to view your booking.',
+          bodyBn: 'আপনার পেমেন্ট সফলভাবে গৃহীত হয়েছে। বুকিং দেখতে ট্যাপ করুন।',
+          deepLink: registration ? `bpa://campaigns/${registration.campaignId}/booking` : undefined,
+          targetUserIds: [userId],
+        },
+      });
+      await enqueueIfNew(result);
+
+      if (registration) {
+        const bookingResult = await publishOutboxEvent({
+          eventType: 'BOOKING_CONFIRMED',
+          entityType: 'campaign_registration',
+          entityId: registration.id,
+          dedupeKey: `booking_confirmed:${registration.id}`,
+          payload: {
+            category: 'booking',
+            priority: 'normal',
+            title: `Booking confirmed: ${registration.campaign.title}`,
+            titleBn: `বুকিং নিশ্চিত হয়েছে: ${registration.campaign.title}`, // Campaign has no titleBn field yet — Bengali label falls back to the (often already-Bengali) title text.
+            body: 'Your campaign registration is confirmed. Tap to view details.',
+            bodyBn: 'আপনার ক্যাম্পেইন নিবন্ধন নিশ্চিত হয়েছে। বিস্তারিত দেখতে ট্যাপ করুন।',
+            deepLink: `bpa://campaigns/${registration.campaignId}/booking`,
+            targetUserIds: [userId],
+          },
+        });
+        await enqueueIfNew(bookingResult);
+      }
+    } else {
+      const result = await publishOutboxEvent({
+        eventType: 'PAYMENT_FAILED',
+        entityType: 'payment',
+        entityId: paymentId,
+        dedupeKey: `payment_failed:${paymentId}`,
+        payload: {
+          category: 'payment',
+          priority: 'high',
+          title: 'Payment failed',
+          titleBn: 'পেমেন্ট ব্যর্থ হয়েছে',
+          body: 'Your payment could not be completed. Tap to try again.',
+          bodyBn: 'আপনার পেমেন্ট সম্পন্ন করা যায়নি। আবার চেষ্টা করতে ট্যাপ করুন।',
+          deepLink: registration ? `bpa://campaigns/${registration.campaignId}/booking` : undefined,
+          targetUserIds: [userId],
+        },
+      });
+      await enqueueIfNew(result);
+    }
+  } catch (err) {
+    // Never let a notification failure roll back or mask a real payment settlement.
+    console.error('[Payments] Failed to emit payment notification:', err instanceof Error ? err.message : err);
+  }
+}
 
 export type SettleResult = 'success' | 'failed' | 'cancelled' | 'pending_review' | 'pending';
 
@@ -51,6 +134,7 @@ export async function settlePayment(merchantTxnId: string): Promise<SettleResult
   if (epsStatus === 'Success') {
     await repo.updatePaymentStatus(payment.id, 'success', epsPayload);
     await activateLinkedEntities(payment);
+    await notifyPaymentOutcome(payment.id, 'success');
     return 'success';
   }
 
@@ -63,6 +147,7 @@ export async function settlePayment(merchantTxnId: string): Promise<SettleResult
   if (epsStatus === 'Failed') {
     await repo.updatePaymentStatus(payment.id, 'failed', epsPayload);
     await deactivateLinkedEntities(payment);
+    await notifyPaymentOutcome(payment.id, 'failed');
     return 'failed';
   }
 
@@ -160,6 +245,7 @@ export async function manualMarkPaid(paymentId: string, adminNote?: string): Pro
     markedAt: new Date().toISOString(),
   });
   await activateLinkedEntities(payment);
+  await notifyPaymentOutcome(payment.id, 'success');
   return { id: payment.id, status: 'success' };
 }
 

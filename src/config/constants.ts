@@ -84,6 +84,9 @@ export const RESOURCES = {
   CONTENT: 'content',
   APP_CONTROL: 'app_control',
   PARTNER_CLINICS: 'partner_clinics',
+  CLINIC_ORGANIZATIONS: 'clinic_organizations',
+  CLINIC_BRANCHES: 'clinic_branches',
+  CLINIC_IMPORTS: 'clinic_imports',
   // Admin Notification & Dashboard
   NOTIFICATIONS: 'notifications',
   DASHBOARD: 'dashboard',
@@ -101,6 +104,8 @@ export const ACTIONS = {
   ISSUE: 'issue',
   ASSIGN: 'assign',
   LIFECYCLE: 'lifecycle',
+  ARCHIVE: 'archive',
+  RESTORE: 'restore',
 } as const;
 
 export const ROLES = {

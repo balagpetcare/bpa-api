@@ -1,8 +1,76 @@
 import { prisma } from '../database/prisma';
 import { writeAuditLog, type AuditContext } from '../utils/audit';
+import { publishOutboxEvent } from '../modules/push-notifications/outbox';
 
 const BATCH_SIZE = 100;
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // every 1 hour
+const EXPIRING_REMINDER_OFFSETS_DAYS = [30, 7, 1] as const;
+const EXPIRING_REMINDER_SCAN_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6 hours
+
+/**
+ * Emits MEMBERSHIP_EXPIRING at {30, 7, 1} days before validUntil — distinct
+ * from runMembershipExpiryJob() above, which transitions already-past
+ * memberships to 'expired'. Runs from the notification worker process
+ * (see src/worker.ts), not the API process, since it only produces
+ * notifications rather than mutating membership state.
+ */
+export async function runMembershipExpiringReminderScan(): Promise<number> {
+  let emitted = 0;
+  const now = new Date();
+
+  for (const offsetDays of EXPIRING_REMINDER_OFFSETS_DAYS) {
+    const targetDate = new Date(now);
+    targetDate.setUTCHours(0, 0, 0, 0);
+    targetDate.setUTCDate(targetDate.getUTCDate() + offsetDays);
+    const nextDay = new Date(targetDate);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+
+    const expiring = await prisma.membership.findMany({
+      where: { status: 'active', validUntil: { gte: targetDate, lt: nextDay } },
+      select: { id: true, membershipNumber: true, userId: true, validUntil: true },
+    });
+
+    for (const membership of expiring) {
+      if (!membership.userId) continue;
+      const dedupeKey = `membership_expiring:${membership.id}:${offsetDays}d`;
+      await publishOutboxEvent({
+        eventType: 'MEMBERSHIP_EXPIRING',
+        entityType: 'membership',
+        entityId: membership.id,
+        dedupeKey,
+        payload: {
+          category: 'membership',
+          priority: offsetDays <= 1 ? 'high' : 'normal',
+          title: `Your membership expires in ${offsetDays} day${offsetDays === 1 ? '' : 's'}`,
+          titleBn: `আপনার সদস্যপদ ${offsetDays} দিনের মধ্যে মেয়াদ শেষ হবে`,
+          body: `Membership ${membership.membershipNumber} expires on ${membership.validUntil?.toISOString().slice(0, 10)}. Renew to keep your benefits.`,
+          bodyBn: `সদস্যপদ ${membership.membershipNumber} ${membership.validUntil?.toISOString().slice(0, 10)} তারিখে মেয়াদ শেষ হবে। সুবিধা বজায় রাখতে নবায়ন করুন।`,
+          deepLink: 'bpa://membership/card',
+          targetUserIds: [membership.userId],
+        },
+      });
+      emitted++;
+    }
+  }
+
+  return emitted;
+}
+
+let expiringReminderHandle: NodeJS.Timeout | null = null;
+
+export function startMembershipExpiringReminderJob(): NodeJS.Timeout {
+  runMembershipExpiringReminderScan()
+    .then((n) => console.log(`[MembershipExpiringReminder] initial scan: ${n} events`))
+    .catch((err) => console.error('[MembershipExpiringReminder] initial scan failed:', err));
+
+  expiringReminderHandle = setInterval(() => {
+    runMembershipExpiringReminderScan()
+      .then((n) => console.log(`[MembershipExpiringReminder] scan: ${n} events`))
+      .catch((err) => console.error('[MembershipExpiringReminder] scan failed:', err));
+  }, EXPIRING_REMINDER_SCAN_INTERVAL_MS);
+
+  return expiringReminderHandle;
+}
 
 /**
  * Finds active memberships with validUntil in the past and marks them as expired.

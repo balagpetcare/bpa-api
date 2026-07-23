@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { config } from '../config';
+import { config, centralAuthAudiences } from '../config';
 import { AppError } from '../utils/AppError';
 import { ERROR_CODES } from '../config/constants';
 
@@ -10,6 +10,16 @@ type CentralAuthPayload = {
   roles?: string[];
 };
 
+export function verifyCentralAuthToken(token: string): CentralAuthPayload {
+  const payload = config.CENTRAL_AUTH_JWT_PUBLIC_KEY
+    ? verifyWithPublicKey(token)
+    : verifyWithSecret(token);
+  if (!payload.sub) {
+    throw AppError.unauthorized('Invalid Central Auth token', ERROR_CODES.TOKEN_INVALID);
+  }
+  return payload;
+}
+
 function verifyWithPublicKey(token: string): CentralAuthPayload {
   if (!config.CENTRAL_AUTH_JWT_PUBLIC_KEY) {
     throw AppError.unauthorized('Central Auth verification is not configured', ERROR_CODES.UNAUTHORIZED);
@@ -17,7 +27,7 @@ function verifyWithPublicKey(token: string): CentralAuthPayload {
   return jwt.verify(token, config.CENTRAL_AUTH_JWT_PUBLIC_KEY, {
     algorithms: [config.CENTRAL_AUTH_JWT_ALGORITHM],
     issuer: config.CENTRAL_AUTH_JWT_ISSUER,
-    audience: config.CENTRAL_AUTH_JWT_AUDIENCE,
+    audience: centralAuthAudiences,
   }) as CentralAuthPayload;
 }
 
@@ -28,7 +38,7 @@ function verifyWithSecret(token: string): CentralAuthPayload {
   return jwt.verify(token, config.CENTRAL_AUTH_JWT_SECRET, {
     algorithms: [config.CENTRAL_AUTH_JWT_ALGORITHM],
     issuer: config.CENTRAL_AUTH_JWT_ISSUER,
-    audience: config.CENTRAL_AUTH_JWT_AUDIENCE,
+    audience: centralAuthAudiences,
   }) as CentralAuthPayload;
 }
 

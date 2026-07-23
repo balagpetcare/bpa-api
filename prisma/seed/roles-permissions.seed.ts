@@ -24,11 +24,14 @@ const RESOURCES = [
   'donations', 'donation_purposes', 'donation_campaigns',
   'campaign_staff_assignments', 'campaign_scan_logs', 'campaign_vaccinations',
   'app_control', 'partner_clinics',
+  'clinic_organizations', 'clinic_branches', 'clinic_imports',
+  'notifications', 'notification_templates', 'notification_automation_rules',
 ];
 
 const ACTIONS = [
   'create', 'read', 'update', 'delete', 'publish', 'manage',
-  'checkin', 'issue', 'assign', 'lifecycle',
+  'checkin', 'issue', 'assign', 'lifecycle', 'archive', 'restore',
+  'approve', 'send', 'emergency',
 ];
 
 type RoleDef = {
@@ -72,6 +75,8 @@ const ROLE_DEFS: RoleDef[] = [
       'donations', 'donation_purposes', 'donation_campaigns',
       'campaign_staff_assignments', 'campaign_scan_logs', 'campaign_vaccinations',
       'partner_clinics',
+      'clinic_organizations', 'clinic_branches', 'clinic_imports',
+      'notifications', 'notification_templates', 'notification_automation_rules',
     ],
     actions: ACTIONS,
     exactPermissions: [
@@ -86,12 +91,15 @@ const ROLE_DEFS: RoleDef[] = [
     resources: [
       'news', 'events', 'committee', 'homepage', 'hero_slides', 'partners', 'footer',
       'media', 'seo', 'content', 'site_settings', 'partner_clinics',
+      'clinic_organizations', 'clinic_branches', 'clinic_imports',
+      'notifications', 'notification_templates',
     ],
     actions: ['create', 'read', 'update', 'publish', 'manage'],
     exactPermissions: [
       { resource: 'app_control', action: 'read' },
       { resource: 'app_control', action: 'manage' },
       { resource: 'app_control', action: 'publish' },
+      { resource: 'notifications', action: 'approve' },
     ],
   },
   {
