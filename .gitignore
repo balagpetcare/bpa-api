@@ -19,3 +19,5 @@ logs/
 *.key
 firebase-service-account*.json
 *firebase-adminsdk*.json
+
+.env-copy
