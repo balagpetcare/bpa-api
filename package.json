@@ -21,6 +21,7 @@
     "clinic:seed": "ts-node -r dotenv/config prisma/seed/clinic-directory.seed.ts",
     "seed:video-categories": "ts-node -r dotenv/config prisma/seed-video-categories.ts",
     "seed:video-content": "ts-node -r dotenv/config prisma/seed-video-content.ts",
+    "seed:homepage-content": "ts-node -r dotenv/config prisma/seed-homepage-content.ts",
     "verify:video-categories": "ts-node -r dotenv/config scripts/verify-video-category-api.ts",
     "seed:verify": "jest --runInBand prisma/__tests__/video-categories.seed.test.ts prisma/__tests__/video-content.seed.test.ts prisma/__tests__/clinic-directory.seed.test.ts prisma/__tests__/master-seed.contract.test.ts src/modules/content/__tests__/public-video-categories.service.test.ts",
     "seed:legacy": "ts-node -r dotenv/config prisma/seed.ts",

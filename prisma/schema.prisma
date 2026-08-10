@@ -239,6 +239,13 @@ enum HomepageSectionType {
   pet_census
   transparency
   pet_smart_solution
+  // Institutional homepage rebuild — see homepage-public module.
+  core_services
+  digital_ecosystem
+  furtail_community
+  video_hub
+  clinic_network
+  governance_documents
 }
 
 enum HomepageSectionSource {
@@ -437,89 +444,111 @@ model User {
   emailVerificationTokens                   EmailVerificationToken[]
   news                                      News[]
   mediaFiles                                MediaFile[]
-  volunteersReviewed                        Volunteer[]                @relation("ReviewedBy")
-  contactsReplied                           ContactSubmission[]        @relation("RepliedBy")
+  volunteersReviewed                        Volunteer[]                  @relation("ReviewedBy")
+  contactsReplied                           ContactSubmission[]          @relation("RepliedBy")
   seoUpdates                                SeoMetadata[]
   refreshTokens                             RefreshToken[]
   members                                   Member[]
-  campaignsCreated                          Campaign[]                 @relation("CampaignCreatedBy")
+  campaignsCreated                          Campaign[]                   @relation("CampaignCreatedBy")
   doctorProfile                             Doctor?
   campaignVolunteers                        CampaignVolunteer[]
   petOwners                                 PetOwner[]
   volunteerCoverageAreas                    VolunteerCoverageArea[]
   qrScanLogs                                QRScanLog[]
-  certificatesIssued                        Certificate[]              @relation("CertificateIssuedBy")
-  homepageUpdates                           Homepage[]                 @relation("HomepageUpdatedBy")
+  certificatesIssued                        Certificate[]                @relation("CertificateIssuedBy")
+  homepageUpdates                           Homepage[]                   @relation("HomepageUpdatedBy")
   censusSubmissions                         PetCensusSubmission[]
   donations                                 Donation[]
   mailNotes                                 MailInternalNote[]
-  assignedInquiries                         ContactInquiry[]           @relation("InquiryAssignee")
-  inquiryReplies                            ContactReply[]             @relation("InquiryReplySender")
-  inquiryForwards                           ContactForward[]           @relation("InquiryForwarder")
-  inquiryNotes                              ContactInternalNote[]      @relation("InquiryNoteAuthor")
+  assignedInquiries                         ContactInquiry[]             @relation("InquiryAssignee")
+  inquiryReplies                            ContactReply[]               @relation("InquiryReplySender")
+  inquiryForwards                           ContactForward[]             @relation("InquiryForwarder")
+  inquiryNotes                              ContactInternalNote[]        @relation("InquiryNoteAuthor")
   contentPosts                              ContentPost[]
   contentComments                           ContentComment[]
   contentReactions                          ContentReaction[]
   contentReports                            ContentReport[]
-  staffAssignments                          CampaignStaffAssignment[]  @relation("StaffUser")
-  staffAssignmentsGiven                     CampaignStaffAssignment[]  @relation("StaffAssignedBy")
-  doctorAssignmentsGiven                    CampaignDoctor[]           @relation("DoctorAssignedBy")
-  vaccinationsPerformed                     VaccinationRecord[]        @relation("VaccinationPerformedBy")
-  faqCreated                                CampaignFaq[]              @relation("FaqCreatedBy")
-  faqUpdated                                CampaignFaq[]              @relation("FaqUpdatedBy")
-  bulkSmsBatchesCreated                     BulkSmsBatch[]             @relation("BulkSmsBatchCreatedBy")
-  appHomeSectionsCreated                    AppHomeSection[]           @relation("AppHomeSectionCreatedBy")
-  appHomeSectionsUpdated                    AppHomeSection[]           @relation("AppHomeSectionUpdatedBy")
-  appBannersCreated                         AppBanner[]                @relation("AppBannerCreatedBy")
-  appBannersUpdated                         AppBanner[]                @relation("AppBannerUpdatedBy")
-  appQuickActionsCreated                    AppQuickAction[]           @relation("AppQuickActionCreatedBy")
-  appQuickActionsUpdated                    AppQuickAction[]           @relation("AppQuickActionUpdatedBy")
-  appFeaturedServicesCreated                AppFeaturedService[]       @relation("AppFeaturedServiceCreatedBy")
-  appFeaturedServicesUpdated                AppFeaturedService[]       @relation("AppFeaturedServiceUpdatedBy")
-  appOffersCreated                          AppOffer[]                 @relation("AppOfferCreatedBy")
-  appOffersUpdated                          AppOffer[]                 @relation("AppOfferUpdatedBy")
-  appNavigationItemsCreated                 AppNavigationItem[]        @relation("AppNavigationItemCreatedBy")
-  appNavigationItemsUpdated                 AppNavigationItem[]        @relation("AppNavigationItemUpdatedBy")
-  appPageContentsCreated                    AppPageContent[]           @relation("AppPageContentCreatedBy")
-  appPageContentsUpdated                    AppPageContent[]           @relation("AppPageContentUpdatedBy")
-  appThemeSettingsCreated                   AppThemeSetting[]          @relation("AppThemeSettingCreatedBy")
-  appThemeSettingsUpdated                   AppThemeSetting[]          @relation("AppThemeSettingUpdatedBy")
-  appVersionSettingsCreated                 AppVersionSetting[]        @relation("AppVersionSettingCreatedBy")
-  appVersionSettingsUpdated                 AppVersionSetting[]        @relation("AppVersionSettingUpdatedBy")
-  appPopupNoticesCreated                    AppPopupNotice[]           @relation("AppPopupNoticeCreatedBy")
-  appPopupNoticesUpdated                    AppPopupNotice[]           @relation("AppPopupNoticeUpdatedBy")
-  appAuditLogsCreated                       AppAuditLog[]              @relation("AppAuditLogCreatedBy")
-  appAuditLogsUpdated                       AppAuditLog[]              @relation("AppAuditLogUpdatedBy")
-  appTutorialGuidesCreated                  AppTutorialGuide[]         @relation("AppTutorialGuideCreatedBy")
-  appTutorialGuidesUpdated                  AppTutorialGuide[]         @relation("AppTutorialGuideUpdatedBy")
-  partnerClinicsCreated                     PartnerClinic[]            @relation("PartnerClinicCreatedBy")
-  partnerClinicsUpdated                     PartnerClinic[]            @relation("PartnerClinicUpdatedBy")
-  clinicOrganizationsCreated                ClinicOrganization[]       @relation("ClinicOrganizationCreatedBy")
-  clinicOrganizationsUpdated                ClinicOrganization[]       @relation("ClinicOrganizationUpdatedBy")
-  clinicOrganizationsArchived               ClinicOrganization[]       @relation("ClinicOrganizationArchivedBy")
-  clinicBranchesCreated                     ClinicBranch[]             @relation("ClinicBranchCreatedBy")
-  clinicBranchesUpdated                     ClinicBranch[]             @relation("ClinicBranchUpdatedBy")
-  clinicBranchesArchived                    ClinicBranch[]             @relation("ClinicBranchArchivedBy")
-  membershipCampaignsCreated                MembershipCampaign[]       @relation("MembershipCampaignCreatedBy")
-  membershipCampaignsUpdated                MembershipCampaign[]       @relation("MembershipCampaignUpdatedBy")
+  staffAssignments                          CampaignStaffAssignment[]    @relation("StaffUser")
+  staffAssignmentsGiven                     CampaignStaffAssignment[]    @relation("StaffAssignedBy")
+  doctorAssignmentsGiven                    CampaignDoctor[]             @relation("DoctorAssignedBy")
+  vaccinationsPerformed                     VaccinationRecord[]          @relation("VaccinationPerformedBy")
+  faqCreated                                CampaignFaq[]                @relation("FaqCreatedBy")
+  faqUpdated                                CampaignFaq[]                @relation("FaqUpdatedBy")
+  bulkSmsBatchesCreated                     BulkSmsBatch[]               @relation("BulkSmsBatchCreatedBy")
+  appHomeSectionsCreated                    AppHomeSection[]             @relation("AppHomeSectionCreatedBy")
+  appHomeSectionsUpdated                    AppHomeSection[]             @relation("AppHomeSectionUpdatedBy")
+  appBannersCreated                         AppBanner[]                  @relation("AppBannerCreatedBy")
+  appBannersUpdated                         AppBanner[]                  @relation("AppBannerUpdatedBy")
+  appQuickActionsCreated                    AppQuickAction[]             @relation("AppQuickActionCreatedBy")
+  appQuickActionsUpdated                    AppQuickAction[]             @relation("AppQuickActionUpdatedBy")
+  appFeaturedServicesCreated                AppFeaturedService[]         @relation("AppFeaturedServiceCreatedBy")
+  appFeaturedServicesUpdated                AppFeaturedService[]         @relation("AppFeaturedServiceUpdatedBy")
+  appOffersCreated                          AppOffer[]                   @relation("AppOfferCreatedBy")
+  appOffersUpdated                          AppOffer[]                   @relation("AppOfferUpdatedBy")
+  appNavigationItemsCreated                 AppNavigationItem[]          @relation("AppNavigationItemCreatedBy")
+  appNavigationItemsUpdated                 AppNavigationItem[]          @relation("AppNavigationItemUpdatedBy")
+  appPageContentsCreated                    AppPageContent[]             @relation("AppPageContentCreatedBy")
+  appPageContentsUpdated                    AppPageContent[]             @relation("AppPageContentUpdatedBy")
+  appThemeSettingsCreated                   AppThemeSetting[]            @relation("AppThemeSettingCreatedBy")
+  appThemeSettingsUpdated                   AppThemeSetting[]            @relation("AppThemeSettingUpdatedBy")
+  appVersionSettingsCreated                 AppVersionSetting[]          @relation("AppVersionSettingCreatedBy")
+  appVersionSettingsUpdated                 AppVersionSetting[]          @relation("AppVersionSettingUpdatedBy")
+  appPopupNoticesCreated                    AppPopupNotice[]             @relation("AppPopupNoticeCreatedBy")
+  appPopupNoticesUpdated                    AppPopupNotice[]             @relation("AppPopupNoticeUpdatedBy")
+  appAuditLogsCreated                       AppAuditLog[]                @relation("AppAuditLogCreatedBy")
+  appAuditLogsUpdated                       AppAuditLog[]                @relation("AppAuditLogUpdatedBy")
+  appTutorialGuidesCreated                  AppTutorialGuide[]           @relation("AppTutorialGuideCreatedBy")
+  appTutorialGuidesUpdated                  AppTutorialGuide[]           @relation("AppTutorialGuideUpdatedBy")
+  platformShowcaseSectionsCreated           PlatformShowcaseSection[]    @relation("PlatformShowcaseSectionCreatedBy")
+  platformShowcaseSectionsUpdated           PlatformShowcaseSection[]    @relation("PlatformShowcaseSectionUpdatedBy")
+  platformShowcaseItemsCreated              PlatformShowcaseItem[]       @relation("PlatformShowcaseItemCreatedBy")
+  platformShowcaseItemsUpdated              PlatformShowcaseItem[]       @relation("PlatformShowcaseItemUpdatedBy")
+  platformShowcaseLinksCreated              PlatformShowcaseLink[]       @relation("PlatformShowcaseLinkCreatedBy")
+  platformShowcaseLinksUpdated              PlatformShowcaseLink[]       @relation("PlatformShowcaseLinkUpdatedBy")
+  partnerClinicsCreated                     PartnerClinic[]              @relation("PartnerClinicCreatedBy")
+  partnerClinicsUpdated                     PartnerClinic[]              @relation("PartnerClinicUpdatedBy")
+  clinicOrganizationsCreated                ClinicOrganization[]         @relation("ClinicOrganizationCreatedBy")
+  clinicOrganizationsUpdated                ClinicOrganization[]         @relation("ClinicOrganizationUpdatedBy")
+  clinicOrganizationsArchived               ClinicOrganization[]         @relation("ClinicOrganizationArchivedBy")
+  clinicBranchesCreated                     ClinicBranch[]               @relation("ClinicBranchCreatedBy")
+  clinicBranchesUpdated                     ClinicBranch[]               @relation("ClinicBranchUpdatedBy")
+  clinicBranchesArchived                    ClinicBranch[]               @relation("ClinicBranchArchivedBy")
+  membershipCampaignsCreated                MembershipCampaign[]         @relation("MembershipCampaignCreatedBy")
+  membershipCampaignsUpdated                MembershipCampaign[]         @relation("MembershipCampaignUpdatedBy")
   membershipApplications                    MembershipApplication[]
-  membershipRecords                         Membership[]               @relation("MembershipUser")
-  membershipCoveredPetsLinked               MembershipCoveredPet[]     @relation("MembershipPetLinkedByUser")
-  membershipCoveredPetsLinkedAsStaff        MembershipCoveredPet[]     @relation("MembershipPetLinkedByStaff")
-  membershipPetReplacementsRequested        MembershipPetReplacement[] @relation("MembershipReplacementRequestedByUser")
-  membershipPetReplacementsRequestedAsStaff MembershipPetReplacement[] @relation("MembershipReplacementRequestedByStaff")
-  membershipPetReplacementsReviewed         MembershipPetReplacement[] @relation("MembershipReplacementReviewedByAdmin")
-  membershipServiceUsagesRecorded           MembershipServiceUsage[]   @relation("MembershipServiceUsageRecordedBy")
-  membershipServiceUsagesReversed           MembershipServiceUsage[]   @relation("MembershipServiceUsageReversedBy")
-  membershipUpgradesRequested               MembershipUpgrade[]        @relation("MembershipUpgradeRequestedByUser")
-  membershipUpgradesReviewed                MembershipUpgrade[]        @relation("MembershipUpgradeReviewedByAdmin")
+  membershipRecords                         Membership[]                 @relation("MembershipUser")
+  membershipCoveredPetsLinked               MembershipCoveredPet[]       @relation("MembershipPetLinkedByUser")
+  membershipCoveredPetsLinkedAsStaff        MembershipCoveredPet[]       @relation("MembershipPetLinkedByStaff")
+  membershipPetReplacementsRequested        MembershipPetReplacement[]   @relation("MembershipReplacementRequestedByUser")
+  membershipPetReplacementsRequestedAsStaff MembershipPetReplacement[]   @relation("MembershipReplacementRequestedByStaff")
+  membershipPetReplacementsReviewed         MembershipPetReplacement[]   @relation("MembershipReplacementReviewedByAdmin")
+  membershipServiceUsagesRecorded           MembershipServiceUsage[]     @relation("MembershipServiceUsageRecordedBy")
+  membershipServiceUsagesReversed           MembershipServiceUsage[]     @relation("MembershipServiceUsageReversedBy")
+  membershipUpgradesRequested               MembershipUpgrade[]          @relation("MembershipUpgradeRequestedByUser")
+  membershipUpgradesReviewed                MembershipUpgrade[]          @relation("MembershipUpgradeReviewedByAdmin")
   deviceInstallations                       DeviceInstallation[]
   notificationPreference                    NotificationPreference?
   userNotifications                         UserNotification[]
-  notificationCampaignsCreated              NotificationCampaign[]     @relation("NotificationCampaignCreatedBy")
-  notificationCampaignsApproved             NotificationCampaign[]     @relation("NotificationCampaignApprovedBy")
-  notificationTemplatesCreated              NotificationTemplate[]     @relation("NotificationTemplateCreatedBy")
+  notificationCampaignsCreated              NotificationCampaign[]       @relation("NotificationCampaignCreatedBy")
+  notificationCampaignsApproved             NotificationCampaign[]       @relation("NotificationCampaignApprovedBy")
+  notificationTemplatesCreated              NotificationTemplate[]       @relation("NotificationTemplateCreatedBy")
   notificationAutomationRulesCreated        NotificationAutomationRule[] @relation("NotificationAutomationRuleCreatedBy")
+
+  spayOffersCreated                 SpayOffer[]                  @relation("SpayOfferCreatedBy")
+  spayOffersUpdated                 SpayOffer[]                  @relation("SpayOfferUpdatedBy")
+  spayClinicProfilesCreated         SpayClinicProfile[]          @relation("SpayClinicProfileCreatedBy")
+  spayClinicProfilesUpdated         SpayClinicProfile[]          @relation("SpayClinicProfileUpdatedBy")
+  spayClinicBlockedPeriodsCreated   SpayClinicBlockedPeriod[]    @relation("SpayClinicBlockedPeriodCreatedBy")
+  spayBookingsCancelled             SpayBooking[]                @relation("SpayBookingCancelledBy")
+  spayMedicalAssessments            SpayMedicalQuestionnaire[]   @relation("SpayMedicalAssessedBy")
+  spayBookingStatusChanges          SpayBookingStatusHistory[]   @relation("SpayBookingStatusHistoryChangedBy")
+  spayBookingReschedulesChanged     SpayBookingRescheduleEvent[] @relation("SpayBookingRescheduleChangedBy")
+  spayRefundRequestsMade            SpayRefundRequest[]          @relation("SpayRefundRequestedBy")
+  spayRefundRequestsReviewed        SpayRefundRequest[]          @relation("SpayRefundReviewedBy")
+  spayRefundRequestsProcessed       SpayRefundRequest[]          @relation("SpayRefundProcessedBy")
+  spayClinicStaffMemberships        SpayClinicStaff[]            @relation("SpayClinicStaffUser")
+  spayClinicStaffAssigned           SpayClinicStaff[]            @relation("SpayClinicStaffAssignedBy")
+  spayDoctorUnavailabilitiesCreated SpayDoctorUnavailability[]   @relation("SpayDoctorUnavailabilityCreatedBy")
 
   @@map("users")
 }
@@ -892,6 +921,8 @@ model Payment {
   membershipApplications      MembershipApplication[]      @relation("MembershipApplicationPayment")
   membershipUpgradesV2        MembershipUpgrade[]          @relation("MembershipUpgradePayment")
   donations                   Donation[]
+  spayBooking                 SpayBooking?
+  spayPaymentAttempts         SpayPaymentAttempt[]
 
   @@index([entityType, entityId])
   @@map("payments")
@@ -1103,28 +1134,43 @@ model MediaFile {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  uploadedBy               User?                 @relation(fields: [uploadedById], references: [id])
-  newsCovers               News[]                @relation("NewsCover")
-  eventCovers              Event[]               @relation("EventCover")
-  committeePhotos          CommitteeMember[]     @relation("CommitteePhoto")
-  seoImages                SeoMetadata[]
-  petPhotos                Pet[]                 @relation("PetPhoto")
-  campaignCovers           Campaign[]            @relation("CampaignCover")
-  campaignMediaItems       CampaignMedia[]
-  homepageSectionItems     HomepageSectionItem[] @relation("HomepageSectionItemMedia")
-  heroDesktopImages        HeroSlide[]           @relation("HeroDesktopImage")
-  heroMobileImages         HeroSlide[]           @relation("HeroMobileImage")
-  heroVideos               HeroSlide[]           @relation("HeroVideo")
-  partnerLogos             Partner[]             @relation("PartnerLogo")
-  footerLogos              FooterConfig[]        @relation("FooterLogo")
-  communityZoneCovers      CommunityZone[]       @relation("CommunityZoneCover")
-  transparencyReportCovers TransparencyReport[]  @relation("TransparencyReportCover")
-  petCensusPhotos          PetCensusSubmission[]
-  membershipMediaItems     MembershipMedia[]
-  membershipDocuments      MembershipDocument[]
-  clinicOrgLogos           ClinicOrganization[]  @relation("ClinicOrgLogoMedia")
-  clinicOrgCovers          ClinicOrganization[]  @relation("ClinicOrgCoverMedia")
-  clinicBranchImages       ClinicBranchImage[]
+  uploadedBy                                User?                     @relation(fields: [uploadedById], references: [id])
+  newsCovers                                News[]                    @relation("NewsCover")
+  eventCovers                               Event[]                   @relation("EventCover")
+  committeePhotos                           CommitteeMember[]         @relation("CommitteePhoto")
+  seoImages                                 SeoMetadata[]
+  petPhotos                                 Pet[]                     @relation("PetPhoto")
+  campaignCovers                            Campaign[]                @relation("CampaignCover")
+  campaignHomepageThumbnails                Campaign[]                @relation("CampaignHomepageThumbnail")
+  campaignMediaItems                        CampaignMedia[]
+  homepageSectionItems                      HomepageSectionItem[]     @relation("HomepageSectionItemMedia")
+  heroDesktopImages                         HeroSlide[]               @relation("HeroDesktopImage")
+  heroMobileImages                          HeroSlide[]               @relation("HeroMobileImage")
+  heroVideos                                HeroSlide[]               @relation("HeroVideo")
+  partnerLogos                              Partner[]                 @relation("PartnerLogo")
+  footerLogos                               FooterConfig[]            @relation("FooterLogo")
+  communityZoneCovers                       CommunityZone[]           @relation("CommunityZoneCover")
+  transparencyReportCovers                  TransparencyReport[]      @relation("TransparencyReportCover")
+  petCensusPhotos                           PetCensusSubmission[]
+  membershipMediaItems                      MembershipMedia[]
+  membershipDocuments                       MembershipDocument[]
+  clinicOrgLogos                            ClinicOrganization[]      @relation("ClinicOrgLogoMedia")
+  clinicOrgCovers                           ClinicOrganization[]      @relation("ClinicOrgCoverMedia")
+  clinicBranchImages                        ClinicBranchImage[]
+  spayOfferMobileImages                     SpayOffer[]               @relation("SpayOfferMobileImage")
+  spayOfferWebImages                        SpayOffer[]               @relation("SpayOfferWebImage")
+  spayOfferHomepageThumbnails               SpayOffer[]               @relation("SpayOfferHomepageThumbnail")
+  spayOfferMediaItems                       SpayOfferMedia[]
+  spayOfferVideoThumbnails                  SpayOfferVideo[]          @relation("SpayOfferVideoThumbnailMedia")
+  bpaProgramIcons                           BpaProgram[]              @relation("BpaProgramIcon")
+  appShowcaseIcons                          AppShowcase[]             @relation("AppShowcaseIcon")
+  appShowcasePlatformQrCodes                AppShowcasePlatformLink[] @relation("AppShowcasePlatformQrCode")
+  appShowcaseScreenshots                    AppShowcaseScreenshot[]   @relation("AppShowcaseScreenshotMedia")
+  platformShowcaseSectionLogos              PlatformShowcaseSection[] @relation("PlatformShowcaseSectionLogo")
+  platformShowcaseItemLogos                 PlatformShowcaseItem[]    @relation("PlatformShowcaseItemLogo")
+  platformShowcaseItemPrimaryPreviewMedia   PlatformShowcaseItem[]    @relation("PlatformShowcaseItemPrimaryPreview")
+  platformShowcaseItemSecondaryPreviewMedia PlatformShowcaseItem[]    @relation("PlatformShowcaseItemSecondaryPreview")
+  publicDocumentFiles                       PublicDocument[]          @relation("PublicDocumentFile")
 
   @@index([mimeType])
   @@map("media_files")
@@ -1743,11 +1789,13 @@ model Doctor {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  user                      User?               @relation(fields: [userId], references: [id])
+  user                      User?                      @relation(fields: [userId], references: [id])
   campaignDoctors           CampaignDoctor[]
   vaccinationRecords        VaccinationRecord[]
-  signingVaccinationRecords VaccinationRecord[] @relation("VaccinationSigningDoctor")
-  signingCertificates       Certificate[]       @relation("CertificateSigningDoctor")
+  signingVaccinationRecords VaccinationRecord[]        @relation("VaccinationSigningDoctor")
+  signingCertificates       Certificate[]              @relation("CertificateSigningDoctor")
+  spayBookings              SpayBooking[]
+  spayUnavailabilities      SpayDoctorUnavailability[]
 
   @@map("doctors")
 }
@@ -1770,46 +1818,48 @@ model VolunteerCoverageArea {
 // ─── Campaign Core ─────────────────────────────────────────────────
 
 model Campaign {
-  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  slug                  String         @unique @db.VarChar(280)
-  title                 String         @db.VarChar(255)
-  description           String?        @db.Text
-  campaignType          CampaignType   @map("campaign_type")
-  status                CampaignStatus @default(draft)
-  startDate             DateTime       @map("start_date") @db.Timestamptz
-  endDate               DateTime       @map("end_date") @db.Timestamptz
-  registrationOpenAt    DateTime?      @map("registration_open_at") @db.Timestamptz
-  registrationCloseAt   DateTime?      @map("registration_close_at") @db.Timestamptz
-  basePriceBdt          Decimal        @default(0) @map("base_price_bdt") @db.Decimal(10, 2)
-  maxPetsPerBooking     Int            @default(10) @map("max_pets_per_booking")
-  certificateTemplateId String?        @map("certificate_template_id") @db.Uuid
-  coverImageId          String?        @map("cover_image_id") @db.Uuid
-  metadata              Json?
-  isFeatured            Boolean        @default(false) @map("is_featured")
-  allowedPetTypes       String[]       @default([]) @map("allowed_pet_types")
-  termsAndConditions    String?        @map("terms_and_conditions") @db.Text
-  faq                   Json?
-  createdById           String         @map("created_by_id") @db.Uuid
-  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  id                       String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug                     String         @unique @db.VarChar(280)
+  title                    String         @db.VarChar(255)
+  description              String?        @db.Text
+  campaignType             CampaignType   @map("campaign_type")
+  status                   CampaignStatus @default(draft)
+  startDate                DateTime       @map("start_date") @db.Timestamptz
+  endDate                  DateTime       @map("end_date") @db.Timestamptz
+  registrationOpenAt       DateTime?      @map("registration_open_at") @db.Timestamptz
+  registrationCloseAt      DateTime?      @map("registration_close_at") @db.Timestamptz
+  basePriceBdt             Decimal        @default(0) @map("base_price_bdt") @db.Decimal(10, 2)
+  maxPetsPerBooking        Int            @default(10) @map("max_pets_per_booking")
+  certificateTemplateId    String?        @map("certificate_template_id") @db.Uuid
+  coverImageId             String?        @map("cover_image_id") @db.Uuid
+  homepageThumbnailMediaId String?        @map("homepage_thumbnail_media_id") @db.Uuid
+  metadata                 Json?
+  isFeatured               Boolean        @default(false) @map("is_featured")
+  allowedPetTypes          String[]       @default([]) @map("allowed_pet_types")
+  termsAndConditions       String?        @map("terms_and_conditions") @db.Text
+  faq                      Json?
+  createdById              String         @map("created_by_id") @db.Uuid
+  createdAt                DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
-  createdBy           User                      @relation("CampaignCreatedBy", fields: [createdById], references: [id])
-  certificateTemplate CertificateTemplate?      @relation(fields: [certificateTemplateId], references: [id])
-  coverImage          MediaFile?                @relation("CampaignCover", fields: [coverImageId], references: [id])
-  media               CampaignMedia[]
-  sessions            CampaignSession[]
-  services            CampaignService[]
-  doctors             CampaignDoctor[]
-  volunteers          CampaignVolunteer[]
-  staffAssignments    CampaignStaffAssignment[]
-  registrations       CampaignRegistration[]
-  waitlistItems       CampaignWaitlist[]
-  analytics           CampaignAnalytics?
-  vaccinationRecords  VaccinationRecord[]
-  faqs                CampaignFaq[]
-  videos              CampaignVideo[]
-  bulkSmsBatches      BulkSmsBatch[]
-  coverages           CampaignCoverage[]
+  createdBy              User                      @relation("CampaignCreatedBy", fields: [createdById], references: [id])
+  certificateTemplate    CertificateTemplate?      @relation(fields: [certificateTemplateId], references: [id])
+  coverImage             MediaFile?                @relation("CampaignCover", fields: [coverImageId], references: [id])
+  homepageThumbnailMedia MediaFile?                @relation("CampaignHomepageThumbnail", fields: [homepageThumbnailMediaId], references: [id])
+  media                  CampaignMedia[]
+  sessions               CampaignSession[]
+  services               CampaignService[]
+  doctors                CampaignDoctor[]
+  volunteers             CampaignVolunteer[]
+  staffAssignments       CampaignStaffAssignment[]
+  registrations          CampaignRegistration[]
+  waitlistItems          CampaignWaitlist[]
+  analytics              CampaignAnalytics?
+  vaccinationRecords     VaccinationRecord[]
+  faqs                   CampaignFaq[]
+  videos                 CampaignVideo[]
+  bulkSmsBatches         BulkSmsBatch[]
+  coverages              CampaignCoverage[]
 
   @@index([status, startDate])
   @@index([campaignType])
@@ -4561,6 +4611,12 @@ model ClinicBranch {
   images       ClinicBranchImage[]
   sources      ClinicBranchSource[]
 
+  spayClinicProfile SpayClinicProfile?
+  spayStaff         SpayClinicStaff[]
+  spayBookings      SpayBooking[]
+  spayOfferLinks    SpayOfferClinic[]
+  spaySlotHolds     SpaySlotHold[]
+
   @@index([organizationId])
   @@index([published])
   @@index([verificationStatus])
@@ -4844,7 +4900,7 @@ model DeviceInstallation {
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
-  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveries NotificationDelivery[]
 
   @@index([userId, isActive])
@@ -4868,7 +4924,7 @@ model NotificationTemplate {
   createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
-  createdBy       User?                         @relation("NotificationTemplateCreatedBy", fields: [createdById], references: [id])
+  createdBy       User?                        @relation("NotificationTemplateCreatedBy", fields: [createdById], references: [id])
   automationRules NotificationAutomationRule[]
   campaigns       NotificationCampaign[]
 
@@ -5046,4 +5102,1086 @@ model NotificationAutomationRule {
   @@index([triggerType, isActive])
   @@index([eventType])
   @@map("notification_automation_rules")
+}
+
+// ─── Spay & Neuter Booking System ──────────────────────────────────
+//
+// New clinic-scoped domain per docs/plans/spay-neuter/implementation-contract.md.
+// Deliberately independent of Campaign/CampaignSession (untested, vaccination-shaped)
+// and of the local Pet/PetOwner registry (the shared /me/pets Furtail registry is
+// canonical — bookings hold an externalPetId + immutable clinical snapshot only,
+// never a local ownership row). All timestamps are Timestamptz (UTC on disk);
+// Asia/Dhaka wall-clock rules are applied at the application boundary only.
+
+enum SpayOfferStatus {
+  draft
+  published
+  paused
+  completed
+}
+
+enum SpayProcedure {
+  neuter
+  spay
+}
+
+enum SpayBookingStatus {
+  pending_payment
+  confirmed
+  checked_in
+  pre_op_assessment
+  ready_for_operation
+  in_operation
+  completed
+  medically_unfit
+  no_show
+  cancelled_by_owner
+  cancelled_by_clinic
+  refund_pending
+  refunded
+}
+
+enum SpayHoldStatus {
+  active
+  converted
+  expired
+  released
+}
+
+enum SpayPaymentAttemptStatus {
+  initiated
+  pending
+  success
+  failed
+  cancelled
+}
+
+enum SpayRefundStatus {
+  pending
+  approved
+  rejected
+  processed
+}
+
+enum SpayOutcome {
+  pending
+  completed
+  aborted
+  deferred
+}
+
+// Why a booking was cancelled — drives refund eligibility (see
+// spay-neuter.cancellation.service.ts). Distinct from SpayBookingStatus
+// (the "cancelled_by_owner"/"cancelled_by_clinic" bucket) because refund
+// eligibility depends on WHY, not just WHO.
+enum SpayCancellationReasonCode {
+  owner_before_cutoff // refundable
+  owner_late // non-refundable
+  no_show // non-refundable
+  clinic_cancelled // always refundable
+  medically_unfit // refundable iff SpayBooking.medicallyUnfitRefundableSnapshot
+  payment_failed // advance never captured — nothing to refund
+  // Admin-console-only reasons (see spay-neuter.cancellation.service.ts
+  // cancelBookingByAdmin) — BPA/clinic-operational faults, always refund-eligible.
+  duplicate_booking
+  scheduling_error
+  administrative
+  // Free-text reason required alongside this code; refund requires manual review.
+  other
+}
+
+enum SpayStaffRole {
+  clinic_admin
+  vet
+  front_desk
+}
+
+// The offer is the admin-controlled, price-bearing, publishable container.
+// Prices are intentionally NOT on ClinicBranch/SpayClinicProfile — the spec
+// requires prices controlled only by BPA Admin, uniformly across clinics.
+model SpayOffer {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String          @db.VarChar(160)
+  slug        String          @unique @db.VarChar(180)
+  summary     String?         @db.VarChar(500)
+  description String?         @db.Text
+  status      SpayOfferStatus @default(draft)
+
+  // Admin-controlled pricing — separate totals per procedure, advance is
+  // part of the total (never additive) and defaults to BDT 500 but is
+  // configurable per offer.
+  neuterTotalPriceBdt Decimal @map("neuter_total_price_bdt") @db.Decimal(10, 2)
+  spayTotalPriceBdt   Decimal @map("spay_total_price_bdt") @db.Decimal(10, 2)
+  advanceBdt          Decimal @default(500) @map("advance_bdt") @db.Decimal(10, 2)
+
+  // Policy text surfaced verbatim to owners and frozen onto every booking.
+  eligibilityText          String? @map("eligibility_text") @db.Text
+  medicalInstructions      String? @map("medical_instructions") @db.Text
+  fastingRules             String? @map("fasting_rules") @db.Text
+  cancellationPolicy       String? @map("cancellation_policy") @db.Text
+  // Whether a MEDICALLY_UNFIT cancellation (vet determines the pet cannot
+  // safely proceed) refunds the advance. Snapshotted onto every booking at
+  // creation time so a later admin policy change never retroactively
+  // changes an existing booking's entitlement.
+  medicallyUnfitRefundable Boolean @default(true) @map("medically_unfit_refundable")
+
+  // Admin-curated homepage highlight flag — mirrors Campaign.isFeatured.
+  // Purely a presentation toggle on the offer's own row; never copied
+  // anywhere else, so price/dates/status stay the single source of truth.
+  featuredOnHomepage Boolean @default(false) @map("featured_on_homepage")
+
+  contactName  String? @map("contact_name") @db.VarChar(120)
+  contactPhone String? @map("contact_phone") @db.VarChar(20)
+  contactEmail String? @map("contact_email") @db.VarChar(255)
+
+  mobileImageId            String? @map("mobile_image_id") @db.Uuid
+  webImageId               String? @map("web_image_id") @db.Uuid
+  homepageThumbnailMediaId String? @map("homepage_thumbnail_media_id") @db.Uuid
+
+  // Campaign/service operating period — Asia/Dhaka wall-clock, stored UTC.
+  // Distinct from clinic-level SpayClinicSchedule/SpaySlot (weekly windows,
+  // date exceptions, manual slots), which remain clinic-scoped and apply to
+  // every offer a clinic participates in. Nullable so existing rows created
+  // before this field existed are not force-backfilled; enforced as
+  // required at the zod layer for every new admin create.
+  startsAt        DateTime? @map("starts_at") @db.Timestamptz
+  endsAt          DateTime? @map("ends_at") @db.Timestamptz
+  // Booking/visibility window — may be a subset of [startsAt, endsAt]
+  // (e.g. stop taking new bookings a few days before the campaign ends).
+  // Null bookingOpensAt means bookable as soon as published; null
+  // bookingClosesAt means bookable until endsAt.
+  bookingOpensAt  DateTime? @map("booking_opens_at") @db.Timestamptz
+  bookingClosesAt DateTime? @map("booking_closes_at") @db.Timestamptz
+
+  publishedAt DateTime? @map("published_at") @db.Timestamptz
+  pausedAt    DateTime? @map("paused_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+
+  createdById String?   @map("created_by_id") @db.Uuid
+  updatedById String?   @map("updated_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  mobileImage            MediaFile? @relation("SpayOfferMobileImage", fields: [mobileImageId], references: [id])
+  webImage               MediaFile? @relation("SpayOfferWebImage", fields: [webImageId], references: [id])
+  homepageThumbnailMedia MediaFile? @relation("SpayOfferHomepageThumbnail", fields: [homepageThumbnailMediaId], references: [id])
+  createdBy              User?      @relation("SpayOfferCreatedBy", fields: [createdById], references: [id])
+  updatedBy              User?      @relation("SpayOfferUpdatedBy", fields: [updatedById], references: [id])
+
+  clinics  SpayOfferClinic[]
+  bookings SpayBooking[]
+  gallery  SpayOfferMedia[]
+  videos   SpayOfferVideo[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("spay_offers")
+}
+
+model SpayOfferMedia {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  offerId     String   @map("offer_id") @db.Uuid
+  mediaFileId String   @map("media_file_id") @db.Uuid
+  sortOrder   Int      @default(0) @map("sort_order")
+  altText     String?  @map("alt_text") @db.VarChar(255)
+  caption     String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  offer     SpayOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  mediaFile MediaFile @relation(fields: [mediaFileId], references: [id])
+
+  @@unique([offerId, mediaFileId])
+  @@index([offerId])
+  @@map("spay_offer_media")
+}
+
+model SpayOfferVideo {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  offerId                String   @map("offer_id") @db.Uuid
+  videoId                String   @map("video_id") @db.VarChar(100) // Canonical YouTube ID
+  title                  String   @db.VarChar(255)
+  description            String?  @db.Text
+  thumbnailUrl           String?  @map("thumbnail_url") @db.VarChar(512)
+  customThumbnailMediaId String?  @map("custom_thumbnail_media_id") @db.Uuid
+  sortOrder              Int      @default(0) @map("sort_order")
+  isActive               Boolean  @default(true) @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  offer                SpayOffer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  customThumbnailMedia MediaFile? @relation("SpayOfferVideoThumbnailMedia", fields: [customThumbnailMediaId], references: [id], onDelete: SetNull)
+
+  @@index([offerId])
+  @@map("spay_offer_videos")
+}
+
+// Participating clinics for an offer — existing ClinicBranch rows are reused,
+// never duplicated. New clinics onboard by first getting a SpayClinicProfile,
+// then being linked here.
+model SpayOfferClinic {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  offerId        String   @map("offer_id") @db.Uuid
+  clinicBranchId String   @map("clinic_branch_id") @db.Uuid
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  offer        SpayOffer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  clinicBranch ClinicBranch @relation(fields: [clinicBranchId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, clinicBranchId])
+  @@index([clinicBranchId])
+  @@map("spay_offer_clinics")
+}
+
+// One profile per participating ClinicBranch — the operational policy record.
+// concurrentOperationCapacity has NO platform default: it is required and
+// clinic-specific per spec.
+model SpayClinicProfile {
+  id                          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicBranchId              String   @unique @map("clinic_branch_id") @db.Uuid
+  concurrentOperationCapacity Int      @map("concurrent_operation_capacity")
+  isAcceptingBookings         Boolean  @default(true) @map("is_accepting_bookings")
+  slotHoldMinutes             Int      @default(10) @map("slot_hold_minutes")
+  cancellationCutoffHours     Int      @default(24) @map("cancellation_cutoff_hours")
+  arriveBeforeMinutes         Int      @default(20) @map("arrive_before_minutes")
+  checkinEarlyMinutes         Int      @default(60) @map("checkin_early_minutes")
+  bookingHorizonDays          Int      @default(30) @map("booking_horizon_days")
+  timezone                    String   @default("Asia/Dhaka") @db.VarChar(64)
+  createdById                 String?  @map("created_by_id") @db.Uuid
+  updatedById                 String?  @map("updated_by_id") @db.Uuid
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  clinicBranch ClinicBranch @relation(fields: [clinicBranchId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("SpayClinicProfileCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?        @relation("SpayClinicProfileUpdatedBy", fields: [updatedById], references: [id])
+
+  services               SpayClinicService[]
+  schedules              SpayClinicSchedule[]
+  breaks                 SpayClinicBreak[]
+  blockedPeriods         SpayClinicBlockedPeriod[]
+  dateExceptions         SpayClinicDateException[]
+  slots                  SpaySlot[]
+  staff                  SpayClinicStaff[]
+  doctorUnavailabilities SpayDoctorUnavailability[]
+
+  @@map("spay_clinic_profiles")
+}
+
+// Per-clinic, per-procedure duration and availability. Seeded with the
+// platform defaults (neuter 20 min / spay 40 min) but clinic-overridable.
+model SpayClinicService {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicProfileId String        @map("clinic_profile_id") @db.Uuid
+  procedure       SpayProcedure
+  durationMinutes Int           @map("duration_minutes")
+  isActive        Boolean       @default(true) @map("is_active")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  clinicProfile    SpayClinicProfile           @relation(fields: [clinicProfileId], references: [id], onDelete: Cascade)
+  serviceSchedules SpayClinicServiceSchedule[]
+  slotHolds        SpaySlotHold[]
+  bookings         SpayBooking[]
+
+  @@unique([clinicProfileId, procedure])
+  @@map("spay_clinic_services")
+}
+
+// Optional per-service weekly override. When a SpayClinicService has no
+// rows here for a given dayOfWeek, availability falls back to the clinic's
+// general SpayClinicSchedule for that day (e.g. Spay only offered mornings
+// while Neuter runs all day).
+model SpayClinicServiceSchedule {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceId String   @map("service_id") @db.Uuid
+  dayOfWeek Int      @map("day_of_week") @db.SmallInt
+  startTime String   @map("start_time") @db.VarChar(5)
+  endTime   String   @map("end_time") @db.VarChar(5)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  service SpayClinicService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, dayOfWeek, startTime])
+  @@map("spay_clinic_service_schedules")
+}
+
+// Recurring weekly operating windows driving slot generation.
+model SpayClinicSchedule {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicProfileId String   @map("clinic_profile_id") @db.Uuid
+  dayOfWeek       Int      @map("day_of_week") @db.SmallInt
+  startTime       String   @map("start_time") @db.VarChar(5)
+  endTime         String   @map("end_time") @db.VarChar(5)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  clinicProfile SpayClinicProfile @relation(fields: [clinicProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicProfileId, dayOfWeek, startTime])
+  @@map("spay_clinic_schedules")
+}
+
+// Recurring intra-day breaks (e.g. lunch) subtracted from slot generation.
+model SpayClinicBreak {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicProfileId String   @map("clinic_profile_id") @db.Uuid
+  dayOfWeek       Int      @map("day_of_week") @db.SmallInt
+  startTime       String   @map("start_time") @db.VarChar(5)
+  endTime         String   @map("end_time") @db.VarChar(5)
+  label           String?  @db.VarChar(120)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  clinicProfile SpayClinicProfile @relation(fields: [clinicProfileId], references: [id], onDelete: Cascade)
+
+  @@index([clinicProfileId, dayOfWeek])
+  @@map("spay_clinic_breaks")
+}
+
+// Ad-hoc blocked windows (e.g. equipment down, staff shortage) — instant
+// ranges, independent of the weekly schedule.
+model SpayClinicBlockedPeriod {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicProfileId String   @map("clinic_profile_id") @db.Uuid
+  startAt         DateTime @map("start_at") @db.Timestamptz
+  endAt           DateTime @map("end_at") @db.Timestamptz
+  reason          String?  @db.VarChar(255)
+  createdById     String?  @map("created_by_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  clinicProfile SpayClinicProfile @relation(fields: [clinicProfileId], references: [id], onDelete: Cascade)
+  createdBy     User?             @relation("SpayClinicBlockedPeriodCreatedBy", fields: [createdById], references: [id])
+
+  @@index([clinicProfileId, startAt, endAt])
+  @@map("spay_clinic_blocked_periods")
+}
+
+// Date-specific overrides of the weekly schedule (holiday closures or
+// one-off special hours).
+model SpayClinicDateException {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicProfileId   String   @map("clinic_profile_id") @db.Uuid
+  exceptionDate     DateTime @map("exception_date") @db.Date
+  isClosed          Boolean  @default(true) @map("is_closed")
+  overrideStartTime String?  @map("override_start_time") @db.VarChar(5)
+  overrideEndTime   String?  @map("override_end_time") @db.VarChar(5)
+  reason            String?  @db.VarChar(255)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  clinicProfile SpayClinicProfile @relation(fields: [clinicProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicProfileId, exceptionDate])
+  @@map("spay_clinic_date_exceptions")
+}
+
+// The bookable unit. capacity mirrors concurrentOperationCapacity at
+// generation time; bookedCount/heldCount are mutated ONLY via the
+// conditional-UPDATE pattern from campaign-registrations.repository.ts
+// (reserveSlots), never via a plain Prisma update.
+model SpaySlot {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicProfileId String         @map("clinic_profile_id") @db.Uuid
+  slotDate        DateTime       @map("slot_date") @db.Date
+  startTime       String         @map("start_time") @db.VarChar(5)
+  endTime         String         @map("end_time") @db.VarChar(5)
+  capacity        Int
+  bookedCount     Int            @default(0) @map("booked_count")
+  heldCount       Int            @default(0) @map("held_count")
+  isActive        Boolean        @default(true) @map("is_active")
+  // Nullable and additive: NULL (the value on every pre-existing manual
+  // slot) means "open to either procedure," preserving exact prior
+  // behavior. Set explicitly to scope a manual slot to one procedure only
+  // — see fetchDayWindowInputs in spay-neuter.availability.service.ts,
+  // which filters manualSlots by `procedure IS NULL OR procedure = :requested`.
+  // Never backfilled/guessed for existing rows — there is no reliable way
+  // to infer which procedure an already-created manual slot was intended
+  // for, so it stays NULL (both) rather than a false guess.
+  procedure       SpayProcedure? @map("procedure")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  clinicProfile SpayClinicProfile @relation(fields: [clinicProfileId], references: [id], onDelete: Cascade)
+
+  holds    SpaySlotHold[]
+  bookings SpayBooking[]
+
+  @@unique([clinicProfileId, slotDate, startTime])
+  @@index([clinicProfileId, slotDate])
+  @@map("spay_slots")
+}
+
+// A 10-minute (configurable) reservation while the owner completes the
+// booking form and payment. idempotencyKey makes hold creation replay-safe.
+// Interval-based hold. Capacity is NOT tracked via a counter anywhere —
+// the active hold/booking ROWS themselves are the source of truth for
+// occupied capacity, checked live via the interval-sweep algorithm in
+// spay-neuter.scheduling.ts every time a new hold or booking is attempted
+// (under a per-clinic-per-date advisory lock — see spay-neuter.hold.service.ts).
+// slotId is optional and set ONLY when the hold originates from an explicit
+// SpaySlot ("manual slot") rather than a schedule-computed window.
+model SpaySlotHold {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slotId            String?        @map("slot_id") @db.Uuid
+  offerId           String         @map("offer_id") @db.Uuid
+  clinicBranchId    String         @map("clinic_branch_id") @db.Uuid
+  serviceId         String         @map("service_id") @db.Uuid
+  procedure         SpayProcedure
+  candidateStartAt  DateTime       @map("candidate_start_at") @db.Timestamptz
+  candidateEndAt    DateTime       @map("candidate_end_at") @db.Timestamptz
+  centralAuthUserId String         @map("central_auth_user_id") @db.VarChar(255)
+  petCount          Int            @default(1) @map("pet_count")
+  status            SpayHoldStatus @default(active)
+  expiresAt         DateTime       @map("expires_at") @db.Timestamptz
+  idempotencyKey    String         @unique @map("idempotency_key") @db.VarChar(255)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  slot         SpaySlot?         @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  clinicBranch ClinicBranch      @relation(fields: [clinicBranchId], references: [id])
+  service      SpayClinicService @relation(fields: [serviceId], references: [id])
+  booking      SpayBooking?
+
+  @@index([slotId, status])
+  @@index([expiresAt, status])
+  @@index([centralAuthUserId])
+  @@index([clinicBranchId, candidateStartAt, candidateEndAt, status])
+  @@map("spay_slot_holds")
+}
+
+// The aggregate root. Price, advance, balance, policy text, clinic identity,
+// service duration, and cutoff timestamps are all frozen at creation time —
+// none of them are ever recomputed from a live SpayOffer/SpayClinicProfile
+// row, so later admin edits cannot retroactively change an existing booking.
+model SpayBooking {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Sequential, human-readable, support-desk-friendly — but sequential
+  // means GUESSABLE, so it is never accepted as an authorization credential.
+  bookingNumber String @unique @map("booking_number") @db.VarChar(40)
+  // Short, cryptographically random (48 bits), safe to hand to the owner as
+  // a public lookup key (booking-lookup screen, printed receipt) — unlike
+  // bookingNumber, this cannot be enumerated.
+  bookingCode   String @unique @map("booking_code") @db.VarChar(16)
+
+  offerId        String        @map("offer_id") @db.Uuid
+  clinicBranchId String        @map("clinic_branch_id") @db.Uuid
+  serviceId      String        @map("service_id") @db.Uuid
+  slotId         String?       @map("slot_id") @db.Uuid
+  holdId         String?       @unique @map("hold_id") @db.Uuid
+  procedure      SpayProcedure
+
+  // Owner identity — the Central Auth subject, NOT a local User FK. Matches
+  // the /me/pets BFF contract; no local ownership row is ever created here.
+  centralAuthUserId String  @map("central_auth_user_id") @db.VarChar(255)
+  contactName       String  @map("contact_name") @db.VarChar(120)
+  contactPhone      String  @map("contact_phone") @db.VarChar(20)
+  contactEmail      String? @map("contact_email") @db.VarChar(255)
+
+  // ── Immutable price/advance/balance snapshot ──
+  // Semantic contract (see spay-neuter.domain.ts computeBookingPrice):
+  //   totalPriceBdt       — total package price. Fixed at booking creation.
+  //   advanceRequiredBdt  — the online advance THIS booking requires,
+  //                         frozen from the offer at creation time. Present
+  //                         and correct from the moment the booking exists,
+  //                         regardless of whether it has been paid yet —
+  //                         never confuse this with advancePaidBdt below.
+  //   advancePaidBdt      — the VERIFIED amount actually captured online.
+  //                         0 until settleSpayBookingPayment confirms the
+  //                         gateway payment; only then does it become
+  //                         advanceRequiredBdt. Never optimistically set.
+  //   balanceDueBdt       — remaining amount payable AT THE CLINIC after
+  //                         the advance (totalPriceBdt - advanceRequiredBdt).
+  //                         Known and fixed from creation — it must NEVER
+  //                         be set to the full totalPriceBdt just because
+  //                         the advance hasn't been verified yet (that was
+  //                         the exact bug that produced a self-contradictory
+  //                         "Advance paid BDT 500 / Remaining BDT 1500" pending
+  //                         screen — 1500 is the total, not what's left after
+  //                         a 500 advance).
+  totalPriceBdt       Decimal @map("total_price_bdt") @db.Decimal(10, 2)
+  advanceRequiredBdt  Decimal @default(0) @map("advance_required_bdt") @db.Decimal(10, 2)
+  advancePaidBdt      Decimal @default(0) @map("advance_paid_bdt") @db.Decimal(10, 2)
+  balanceDueBdt       Decimal @map("balance_due_bdt") @db.Decimal(10, 2)
+  balanceCollectedBdt Decimal @default(0) @map("balance_collected_bdt") @db.Decimal(10, 2)
+
+  // ── Immutable policy snapshot (copied verbatim from SpayOffer) ──
+  offerTitleSnapshot               String  @map("offer_title_snapshot") @db.VarChar(160)
+  eligibilitySnapshot              String? @map("eligibility_snapshot") @db.Text
+  medicalInstructionsSnapshot      String? @map("medical_instructions_snapshot") @db.Text
+  fastingRulesSnapshot             String? @map("fasting_rules_snapshot") @db.Text
+  cancellationPolicySnapshot       String? @map("cancellation_policy_snapshot") @db.Text
+  medicallyUnfitRefundableSnapshot Boolean @default(true) @map("medically_unfit_refundable_snapshot")
+
+  // ── Immutable clinic/service/duration snapshot ──
+  clinicNameSnapshot      String  @map("clinic_name_snapshot") @db.VarChar(255)
+  clinicAddressSnapshot   String? @map("clinic_address_snapshot") @db.Text
+  durationMinutesSnapshot Int     @map("duration_minutes_snapshot")
+
+  // ── Derived + frozen scheduling timestamps (UTC; Asia/Dhaka applied at
+  //    the boundary when these were computed) ──
+  scheduledStartAt     DateTime @map("scheduled_start_at") @db.Timestamptz
+  scheduledEndAt       DateTime @map("scheduled_end_at") @db.Timestamptz
+  arriveByAt           DateTime @map("arrive_by_at") @db.Timestamptz
+  checkinOpensAt       DateTime @map("checkin_opens_at") @db.Timestamptz
+  cancellationCutoffAt DateTime @map("cancellation_cutoff_at") @db.Timestamptz
+
+  status  SpayBookingStatus @default(pending_payment)
+  qrToken String            @unique @map("qr_token") @db.VarChar(128)
+
+  assignedDoctorId String? @map("assigned_doctor_id") @db.Uuid
+
+  actualArrivalAt          DateTime?                   @map("actual_arrival_at") @db.Timestamptz
+  operationLane            String?                     @map("operation_lane") @db.VarChar(50)
+  checkedInAt              DateTime?                   @map("checked_in_at") @db.Timestamptz
+  operationStartedAt       DateTime?                   @map("operation_started_at") @db.Timestamptz
+  operationCompletedAt     DateTime?                   @map("operation_completed_at") @db.Timestamptz
+  clinicBalanceCollected   Boolean                     @default(false) @map("clinic_balance_collected")
+  postOpInstructionsSentAt DateTime?                   @map("post_op_instructions_sent_at") @db.Timestamptz
+  followUpDate             DateTime?                   @map("follow_up_date") @db.Date
+  followUpNotes            String?                     @map("follow_up_notes") @db.Text
+  noShowAt                 DateTime?                   @map("no_show_at") @db.Timestamptz
+  cancelledAt              DateTime?                   @map("cancelled_at") @db.Timestamptz
+  cancelledById            String?                     @map("cancelled_by_id") @db.Uuid
+  cancellationReason       String?                     @map("cancellation_reason") @db.Text
+  cancellationReasonCode   SpayCancellationReasonCode? @map("cancellation_reason_code")
+  rescheduleCount          Int                         @default(0) @map("reschedule_count")
+  consentAcceptedAt        DateTime?                   @map("consent_accepted_at") @db.Timestamptz
+
+  notes       String? @db.Text
+  clinicNotes String? @map("clinic_notes") @db.Text
+
+  paymentId String? @unique @map("payment_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  offer          SpayOffer         @relation(fields: [offerId], references: [id])
+  clinicBranch   ClinicBranch      @relation(fields: [clinicBranchId], references: [id])
+  service        SpayClinicService @relation(fields: [serviceId], references: [id])
+  slot           SpaySlot?         @relation(fields: [slotId], references: [id])
+  hold           SpaySlotHold?     @relation(fields: [holdId], references: [id])
+  assignedDoctor Doctor?           @relation(fields: [assignedDoctorId], references: [id])
+  cancelledBy    User?             @relation("SpayBookingCancelledBy", fields: [cancelledById], references: [id])
+  payment        Payment?          @relation(fields: [paymentId], references: [id])
+
+  pets             SpayBookingPet[]
+  statusHistory    SpayBookingStatusHistory[]
+  rescheduleEvents SpayBookingRescheduleEvent[]
+  paymentAttempts  SpayPaymentAttempt[]
+  refundRequests   SpayRefundRequest[]
+
+  @@index([clinicBranchId, status])
+  @@index([slotId])
+  @@index([centralAuthUserId])
+  @@index([status])
+  @@index([scheduledStartAt])
+  // Reporting query shapes: clinic/date utilization scans (clinicBranchId +
+  // date range) and spay-vs-neuter breakdown filtered/grouped by status.
+  @@index([clinicBranchId, scheduledStartAt])
+  @@index([procedure, status])
+  @@map("spay_bookings")
+}
+
+// One row per pet on a booking. externalPetId is the Furtail /me/pets id —
+// the ONLY pet reference; no local Pet/PetOwner row is ever created.
+model SpayBookingPet {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId     String @map("booking_id") @db.Uuid
+  externalPetId String @map("external_pet_id") @db.VarChar(255)
+
+  petNameSnapshot            String?  @map("pet_name_snapshot") @db.VarChar(120)
+  speciesSnapshot            String?  @map("species_snapshot") @db.VarChar(40)
+  sexSnapshot                String?  @map("sex_snapshot") @db.VarChar(20)
+  breedSnapshot              String?  @map("breed_snapshot") @db.VarChar(120)
+  weightKgSnapshot           Decimal? @map("weight_kg_snapshot") @db.Decimal(6, 2)
+  ageMonthsSnapshot          Int?     @map("age_months_snapshot")
+  wasAlreadyNeuteredSnapshot Boolean? @map("was_already_neutered_snapshot")
+
+  outcome      SpayOutcome @default(pending)
+  outcomeNotes String?     @map("outcome_notes") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  booking       SpayBooking               @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  questionnaire SpayMedicalQuestionnaire?
+
+  @@unique([bookingId, externalPetId])
+  @@map("spay_booking_pets")
+}
+
+// Pre-operative medical questionnaire and vet assessment — one per pet
+// per booking.
+model SpayMedicalQuestionnaire {
+  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingPetId String @unique @map("booking_pet_id") @db.Uuid
+
+  isEatingNormally     Boolean?  @map("is_eating_normally")
+  isVomiting           Boolean?  @map("is_vomiting")
+  hasRecentIllness     Boolean?  @map("has_recent_illness")
+  recentIllnessDetails String?   @map("recent_illness_details") @db.Text
+  currentMedications   String?   @map("current_medications") @db.Text
+  knownAllergies       String?   @map("known_allergies") @db.Text
+  lastMealAt           DateTime? @map("last_meal_at") @db.Timestamptz
+  fastingConfirmed     Boolean   @default(false) @map("fasting_confirmed")
+
+  vetWeightKg          Decimal?  @map("vet_weight_kg") @db.Decimal(6, 2)
+  vetTemperatureC      Decimal?  @map("vet_temperature_c") @db.Decimal(4, 1)
+  vetAssessmentNotes   String?   @map("vet_assessment_notes") @db.Text
+  isEligibleForSurgery Boolean?  @map("is_eligible_for_surgery")
+  ineligibilityReason  String?   @map("ineligibility_reason") @db.Text
+  assessedById         String?   @map("assessed_by_id") @db.Uuid
+  assessedAt           DateTime? @map("assessed_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  bookingPet SpayBookingPet @relation(fields: [bookingPetId], references: [id], onDelete: Cascade)
+  assessedBy User?          @relation("SpayMedicalAssessedBy", fields: [assessedById], references: [id])
+
+  @@map("spay_medical_questionnaires")
+}
+
+// Append-only booking status timeline (structured, UI-friendly). Generic
+// cross-cutting audit events additionally go through the existing
+// writeAuditLog()/AuditLog for platform-wide audit search — this table is
+// specifically the booking state-machine's own history.
+model SpayBookingStatusHistory {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId   String             @map("booking_id") @db.Uuid
+  fromStatus  SpayBookingStatus? @map("from_status")
+  toStatus    SpayBookingStatus  @map("to_status")
+  changedById String?            @map("changed_by_id") @db.Uuid
+  reason      String?            @db.Text
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz
+
+  booking   SpayBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  changedBy User?       @relation("SpayBookingStatusHistoryChangedBy", fields: [changedById], references: [id])
+
+  @@index([bookingId, createdAt])
+  @@map("spay_booking_status_history")
+}
+
+// Append-only reschedule trail — a booking may reschedule more than once;
+// each row preserves the slot/time it moved from and to.
+model SpayBookingRescheduleEvent {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId            String   @map("booking_id") @db.Uuid
+  // Nullable: most bookings are schedule-computed (no SpaySlot origin at
+  // all — see SpayBooking.slotId), so these are populated only when a
+  // manual slot happened to be involved. fromScheduledStartAt/
+  // toScheduledStartAt below are the authoritative record of the change.
+  fromSlotId           String?  @map("from_slot_id") @db.Uuid
+  toSlotId             String?  @map("to_slot_id") @db.Uuid
+  fromScheduledStartAt DateTime @map("from_scheduled_start_at") @db.Timestamptz
+  toScheduledStartAt   DateTime @map("to_scheduled_start_at") @db.Timestamptz
+  reason               String?  @db.Text
+  changedById          String?  @map("changed_by_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  booking   SpayBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  changedBy User?       @relation("SpayBookingRescheduleChangedBy", fields: [changedById], references: [id])
+
+  @@index([bookingId, createdAt])
+  @@map("spay_booking_reschedule_events")
+}
+
+// One row per gateway attempt (a booking may retry EPS initiation more than
+// once before success). merchantTxnId is unique platform-wide, matching the
+// existing Payment.merchantTxnId convention.
+model SpayPaymentAttempt {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId       String                   @map("booking_id") @db.Uuid
+  paymentId       String?                  @map("payment_id") @db.Uuid
+  gateway         PaymentGateway           @default(eps)
+  merchantTxnId   String                   @unique @map("merchant_txn_id") @db.VarChar(40)
+  providerRef     String?                  @map("provider_ref") @db.VarChar(255)
+  amountBdt       Decimal                  @map("amount_bdt") @db.Decimal(10, 2)
+  status          SpayPaymentAttemptStatus @default(initiated)
+  requestPayload  Json?                    @map("request_payload")
+  responsePayload Json?                    @map("response_payload")
+  // Client-generated (see createSlotHoldSchema's identical field for the
+  // hold-creation endpoint — same convention). Optional/nullable: only
+  // Retry Payment calls supply one; the very first attempt created inline
+  // by createBookingFromHold never needs one (it can't be double-tapped —
+  // it's gated behind the hold's own idempotencyKey). NULL is safe under a
+  // unique index in Postgres (multiple NULLs never collide with each other).
+  idempotencyKey  String?                  @unique @map("idempotency_key") @db.VarChar(255)
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+
+  booking SpayBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  payment Payment?    @relation(fields: [paymentId], references: [id])
+
+  @@index([bookingId])
+  @@index([status])
+  @@index([paymentId])
+  @@map("spay_payment_attempts")
+}
+
+// The only refund mechanism. Clinic staff may create; only BPA Central Admin
+// may transition status away from pending (enforced in the service layer,
+// not just RBAC — see spayClinicAccess + authorize('spay_refunds','approve')).
+// Refund status is its own state machine, deliberately decoupled from
+// SpayBookingStatus and PaymentStatus (see spay-neuter.refund.service.ts).
+// Only the ADVANCE (the amount that actually moved through EPS) is ever
+// refunded here — the balance is settled at the clinic and was never
+// charged online. Exactly one of requestedById / requestedByCentralAuthUserId
+// is set: staff/admin-raised requests use the former (a local User row
+// exists for authenticated staff); owner self-service cancellations use the
+// latter (owners are Central Auth subjects with no local User row, per the
+// "no duplicate ownership data" decision — see SpayBooking.centralAuthUserId).
+model SpayRefundRequest {
+  id                           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId                    String           @map("booking_id") @db.Uuid
+  requestedById                String?          @map("requested_by_id") @db.Uuid
+  requestedByCentralAuthUserId String?          @map("requested_by_central_auth_user_id") @db.VarChar(255)
+  amountBdt                    Decimal          @map("amount_bdt") @db.Decimal(10, 2)
+  reason                       String           @db.Text
+  status                       SpayRefundStatus @default(pending)
+  reviewedById                 String?          @map("reviewed_by_id") @db.Uuid
+  reviewedAt                   DateTime?        @map("reviewed_at") @db.Timestamptz
+  reviewNotes                  String?          @map("review_notes") @db.Text
+  // Set ONLY when a BPA Central Admin has manually executed the refund
+  // (bank transfer / EPS merchant portal / mobile wallet payout) outside
+  // this system — EPS has no supported refund API, so this workflow never
+  // claims a gateway-executed success. See processSpayRefund() for the
+  // explicit "no fake provider success" guard.
+  externalRefundRef            String?          @map("external_refund_ref") @db.VarChar(255)
+  processedAt                  DateTime?        @map("processed_at") @db.Timestamptz
+  processedById                String?          @map("processed_by_id") @db.Uuid
+  createdAt                    DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                    DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  booking     SpayBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  requestedBy User?       @relation("SpayRefundRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy  User?       @relation("SpayRefundReviewedBy", fields: [reviewedById], references: [id])
+  processedBy User?       @relation("SpayRefundProcessedBy", fields: [processedById], references: [id])
+
+  @@index([bookingId])
+  @@index([status])
+  @@map("spay_refund_requests")
+}
+
+// Row-level authorization scope for clinic-side endpoints — asserted by the
+// new spayClinicAccess middleware, independent of (and in addition to) the
+// resource:action permission check.
+model SpayClinicStaff {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicBranchId  String        @map("clinic_branch_id") @db.Uuid
+  clinicProfileId String?       @map("clinic_profile_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  staffRole       SpayStaffRole @map("staff_role")
+  isActive        Boolean       @default(true) @map("is_active")
+  assignedById    String?       @map("assigned_by_id") @db.Uuid
+  assignedAt      DateTime      @default(now()) @map("assigned_at") @db.Timestamptz
+
+  clinicBranch  ClinicBranch       @relation(fields: [clinicBranchId], references: [id], onDelete: Cascade)
+  clinicProfile SpayClinicProfile? @relation(fields: [clinicProfileId], references: [id], onDelete: SetNull)
+  user          User               @relation("SpayClinicStaffUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy    User?              @relation("SpayClinicStaffAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([clinicBranchId, userId])
+  @@index([userId])
+  @@map("spay_clinic_staff")
+}
+
+// A period a specific doctor is unavailable at a clinic. Modeled as reducing
+// the clinic's effective concurrent capacity for the overlapping window by
+// one "operating room" per unavailable doctor — folded into the same
+// interval-sweep algorithm as real holds/bookings as a synthetic occupying
+// interval (see spay-neuter.scheduling.ts). This is a deliberate
+// simplification: it does not track per-doctor assignment (assignedDoctorId
+// on SpayBooking is still set later, independently), only that capacity is
+// constrained by staffing during this window.
+model SpayDoctorUnavailability {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId        String   @map("doctor_id") @db.Uuid
+  clinicProfileId String   @map("clinic_profile_id") @db.Uuid
+  startAt         DateTime @map("start_at") @db.Timestamptz
+  endAt           DateTime @map("end_at") @db.Timestamptz
+  reason          String?  @db.VarChar(255)
+  createdById     String?  @map("created_by_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  doctor        Doctor            @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinicProfile SpayClinicProfile @relation(fields: [clinicProfileId], references: [id], onDelete: Cascade)
+  createdBy     User?             @relation("SpayDoctorUnavailabilityCreatedBy", fields: [createdById], references: [id])
+
+  @@index([clinicProfileId, startAt, endAt])
+  @@index([doctorId])
+  @@map("spay_doctor_unavailabilities")
+}
+
+// ─── Public Homepage Data Contract — smallest-necessary CMS models ────────
+// Backs GET /api/v1/public/homepage for content that has no existing source
+// of truth (core program tiles, app-download links, public/governance
+// documents). Everything else the homepage contract needs (campaigns,
+// spay/neuter offers, videos, clinics, news, stats) is read live from its
+// existing model — never duplicated here.
+
+model BpaProgram {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key           String   @unique @db.VarChar(60)
+  titleEn       String   @map("title_en") @db.VarChar(160)
+  titleBn       String?  @map("title_bn") @db.VarChar(160)
+  descriptionEn String?  @map("description_en") @db.Text
+  descriptionBn String?  @map("description_bn") @db.Text
+  iconKey       String?  @map("icon_key") @db.VarChar(60)
+  iconMediaId   String?  @map("icon_media_id") @db.Uuid
+  ctaLabel      String?  @map("cta_label") @db.VarChar(80)
+  ctaHref       String?  @map("cta_href") @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  iconMedia MediaFile? @relation("BpaProgramIcon", fields: [iconMediaId], references: [id], onDelete: SetNull)
+
+  @@index([isActive, sortOrder])
+  @@map("bpa_programs")
+}
+
+enum AppShowcasePlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+// LIVE is the only status that may ever be paired with a real `storeUrl` —
+// see AppShowcasePlatformLink.storeUrl. COMING_SOON/BETA exist specifically
+// so the public site can show an honest "Coming Soon" state instead of a
+// fake, non-functional store button.
+enum AppShowcaseAvailability {
+  LIVE
+  COMING_SOON
+  BETA
+}
+
+enum PlatformShowcasePlatformType {
+  APP
+  WEBSITE
+}
+
+enum PlatformShowcaseLinkType {
+  GOOGLE_PLAY
+  APP_STORE
+  WEBSITE
+  DETAILS
+  OTHER
+}
+
+// `appKey` is a free-text key ("bpa" / "furtail" / future apps) rather than
+// an enum so a new app can be added by an admin without a migration.
+model AppShowcase {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appKey            String   @unique @map("app_key") @db.VarChar(40)
+  name              String   @db.VarChar(120)
+  tagline           String?  @db.VarChar(200)
+  description       String?  @db.Text
+  // Free-text, admin-authored description of how this app relates to BPA
+  // (e.g. "An independent community platform built on BPA infrastructure").
+  // Deliberately never inferred/hardcoded in application code — the public
+  // site must not claim a legal/ownership relationship that isn't
+  // explicitly configured here.
+  relationshipLabel String?  @map("relationship_label") @db.VarChar(160)
+  iconMediaId       String?  @map("icon_media_id") @db.Uuid
+  isActive          Boolean  @default(true) @map("is_active")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  iconMedia   MediaFile?                @relation("AppShowcaseIcon", fields: [iconMediaId], references: [id], onDelete: SetNull)
+  platforms   AppShowcasePlatformLink[]
+  features    AppShowcaseFeature[]
+  screenshots AppShowcaseScreenshot[]
+
+  @@index([isActive, sortOrder])
+  @@map("app_showcases")
+}
+
+model AppShowcasePlatformLink {
+  id            String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appShowcaseId String                  @map("app_showcase_id") @db.Uuid
+  platform      AppShowcasePlatform
+  availability  AppShowcaseAvailability @default(COMING_SOON)
+  // Must be null whenever `availability` isn't LIVE — enforced at the admin
+  // write layer, not just by convention, so the public API can never surface
+  // a clickable store link for an app that isn't actually published.
+  storeUrl      String?                 @map("store_url") @db.Text
+  qrCodeMediaId String?                 @map("qr_code_media_id") @db.Uuid
+  sortOrder     Int                     @default(0) @map("sort_order")
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  appShowcase AppShowcase @relation(fields: [appShowcaseId], references: [id], onDelete: Cascade)
+  qrCodeMedia MediaFile?  @relation("AppShowcasePlatformQrCode", fields: [qrCodeMediaId], references: [id], onDelete: SetNull)
+
+  @@unique([appShowcaseId, platform])
+  @@index([appShowcaseId])
+  @@map("app_showcase_platform_links")
+}
+
+model AppShowcaseFeature {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appShowcaseId String   @map("app_showcase_id") @db.Uuid
+  label         String   @db.VarChar(160)
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  appShowcase AppShowcase @relation(fields: [appShowcaseId], references: [id], onDelete: Cascade)
+
+  @@index([appShowcaseId, sortOrder])
+  @@map("app_showcase_features")
+}
+
+model AppShowcaseScreenshot {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appShowcaseId String   @map("app_showcase_id") @db.Uuid
+  mediaFileId   String   @map("media_file_id") @db.Uuid
+  caption       String?  @db.VarChar(200)
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  appShowcase AppShowcase @relation(fields: [appShowcaseId], references: [id], onDelete: Cascade)
+  mediaFile   MediaFile   @relation("AppShowcaseScreenshotMedia", fields: [mediaFileId], references: [id])
+
+  @@unique([appShowcaseId, mediaFileId])
+  @@index([appShowcaseId])
+  @@map("app_showcase_screenshots")
+}
+
+model PlatformShowcaseSection {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String         @unique @db.VarChar(80)
+  eyebrow     String?        @db.VarChar(120)
+  title       String         @db.VarChar(160)
+  subtitle    String?        @db.Text
+  description String?        @db.Text
+  layout      String         @default("default") @db.VarChar(60)
+  theme       String         @default("default") @db.VarChar(60)
+  status      HomepageStatus @default(draft)
+  isActive    Boolean        @default(true) @map("is_active")
+  sortOrder   Int            @default(0) @map("sort_order")
+  createdById String?        @map("created_by_id") @db.Uuid
+  updatedById String?        @map("updated_by_id") @db.Uuid
+  logoMediaId String?        @map("logo_media_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  createdBy User?                  @relation("PlatformShowcaseSectionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?                  @relation("PlatformShowcaseSectionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  logoMedia MediaFile?             @relation("PlatformShowcaseSectionLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
+  items     PlatformShowcaseItem[]
+
+  @@index([status, isActive, sortOrder])
+  @@index([sortOrder])
+  @@map("platform_showcase_sections")
+}
+
+model PlatformShowcaseItem {
+  id                      String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sectionId               String                       @map("section_id") @db.Uuid
+  platformKey             String                       @map("platform_key") @db.VarChar(80)
+  brandKey                String                       @map("brand_key") @db.VarChar(80)
+  platformType            PlatformShowcasePlatformType @map("platform_type")
+  name                    String                       @db.VarChar(160)
+  badgeText               String?                      @map("badge_text") @db.VarChar(120)
+  heading                 String?                      @db.VarChar(180)
+  subheading              String?                      @db.VarChar(200)
+  description             String?                      @db.Text
+  featureBullets          String[]                     @default([]) @map("feature_bullets")
+  ctaText                 String?                      @map("cta_text") @db.VarChar(80)
+  ctaUrl                  String?                      @map("cta_url") @db.Text
+  layoutOverride          String?                      @map("layout_override") @db.VarChar(60)
+  featured                Boolean                      @default(false) @map("featured")
+  isActive                Boolean                      @default(true) @map("is_active")
+  sortOrder               Int                          @default(0) @map("sort_order")
+  createdById             String?                      @map("created_by_id") @db.Uuid
+  updatedById             String?                      @map("updated_by_id") @db.Uuid
+  logoMediaId             String?                      @map("logo_media_id") @db.Uuid
+  primaryPreviewMediaId   String?                      @map("primary_preview_media_id") @db.Uuid
+  secondaryPreviewMediaId String?                      @map("secondary_preview_media_id") @db.Uuid
+  previewMode             String                       @default("RAW_IMAGE") @map("preview_mode") @db.VarChar(20)
+  createdAt               DateTime                     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime                     @updatedAt @map("updated_at") @db.Timestamptz
+
+  section               PlatformShowcaseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  createdBy             User?                   @relation("PlatformShowcaseItemCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy             User?                   @relation("PlatformShowcaseItemUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  logoMedia             MediaFile?              @relation("PlatformShowcaseItemLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
+  primaryPreviewMedia   MediaFile?              @relation("PlatformShowcaseItemPrimaryPreview", fields: [primaryPreviewMediaId], references: [id], onDelete: SetNull)
+  secondaryPreviewMedia MediaFile?              @relation("PlatformShowcaseItemSecondaryPreview", fields: [secondaryPreviewMediaId], references: [id], onDelete: SetNull)
+  links                 PlatformShowcaseLink[]
+
+  @@unique([sectionId, platformKey])
+  @@index([sectionId, isActive, sortOrder])
+  @@index([platformKey])
+  @@index([brandKey])
+  @@map("platform_showcase_items")
+}
+
+model PlatformShowcaseLink {
+  id           String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId       String                   @map("item_id") @db.Uuid
+  type         PlatformShowcaseLinkType
+  label        String                   @db.VarChar(120)
+  url          String                   @db.Text
+  qrEnabled    Boolean                  @default(false) @map("qr_enabled")
+  qrCaption    String?                  @map("qr_caption") @db.VarChar(160)
+  openInNewTab Boolean                  @default(false) @map("open_in_new_tab")
+  isActive     Boolean                  @default(true) @map("is_active")
+  sortOrder    Int                      @default(0) @map("sort_order")
+  createdById  String?                  @map("created_by_id") @db.Uuid
+  updatedById  String?                  @map("updated_by_id") @db.Uuid
+  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+
+  item      PlatformShowcaseItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  createdBy User?                @relation("PlatformShowcaseLinkCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?                @relation("PlatformShowcaseLinkUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([itemId, isActive, sortOrder])
+  @@index([itemId, sortOrder])
+  @@index([type])
+  @@map("platform_showcase_links")
+}
+
+enum PublicDocumentCategory {
+  LEGAL
+  GOVERNANCE
+  FINANCIAL
+  POLICY
+  OTHER
+}
+
+// Site-wide legal/governance documents (Terms, Privacy Policy, Annual
+// Report, etc.). Deliberately separate from the per-feature policy text
+// already on Campaign/MembershipCampaign/SpayOffer, which stays scoped to
+// that feature. The actual file is an existing MediaFile — never a
+// duplicated upload — or an external URL for documents hosted elsewhere.
+model PublicDocument {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String                 @unique @db.VarChar(80)
+  titleEn     String                 @map("title_en") @db.VarChar(200)
+  titleBn     String?                @map("title_bn") @db.VarChar(200)
+  category    PublicDocumentCategory @default(OTHER)
+  summary     String?                @db.Text
+  fileMediaId String?                @map("file_media_id") @db.Uuid
+  externalUrl String?                @map("external_url") @db.Text
+  version     String?                @db.VarChar(40)
+  publishedAt DateTime?              @map("published_at") @db.Timestamptz
+  isActive    Boolean                @default(true) @map("is_active")
+  sortOrder   Int                    @default(0) @map("sort_order")
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  fileMedia MediaFile? @relation("PublicDocumentFile", fields: [fileMediaId], references: [id], onDelete: SetNull)
+
+  @@index([isActive, sortOrder])
+  @@index([category])
+  @@map("public_documents")
 }

@@ -22,7 +22,18 @@ export type OutboxEventPayload = {
   targetAll?: boolean;
   /** Emergency/security notifications bypass normal marketing preferences and quiet hours. */
   bypassPreferences?: boolean;
+  /** Persist a user-visible inbox item even when the user disabled in-app delivery. */
+  alwaysCreateInbox?: boolean;
   expiresAt?: string;
+  /** Optional email side-channel. The inbox remains the source of truth. */
+  email?: {
+    subject?: string;
+    subjectBn?: string;
+    html?: string;
+    htmlBn?: string;
+    text?: string;
+    textBn?: string;
+  };
   /** Set when this event originates from an admin-composed NotificationCampaign, so
    * the resulting UserNotification/NotificationDelivery rows link back to it for analytics. */
   campaignId?: string;

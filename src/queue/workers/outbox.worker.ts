@@ -1,9 +1,9 @@
-import { Worker, Job } from 'bullmq';
+import { Job, Worker } from 'bullmq';
 import { prisma } from '../../database/prisma';
-import { getRedisConnection } from '../redis';
-import { OUTBOX_QUEUE_NAME, enqueueDelivery } from '../queues';
-import { isOutboxEventPayload, OutboxEventPayload } from '../../modules/push-notifications/outbox-payload';
 import { isCategoryAllowed, isWithinQuietHours } from '../../modules/push-notifications/preferences';
+import { isOutboxEventPayload, OutboxEventPayload } from '../../modules/push-notifications/outbox-payload';
+import { enqueueDelivery, OUTBOX_QUEUE_NAME } from '../queues';
+import { getRedisConnection } from '../redis';
 
 const BATCH_SIZE = 500;
 
@@ -13,7 +13,6 @@ async function resolveTargetUserIds(payload: OutboxEventPayload): Promise<string
 
   const ids: string[] = [];
   let cursor: string | undefined;
-  // Batch through the user table rather than loading the whole table at once.
   for (;;) {
     const page = await prisma.user.findMany({
       where: { isActive: true, deletedAt: null },
@@ -30,11 +29,140 @@ async function resolveTargetUserIds(payload: OutboxEventPayload): Promise<string
   return ids;
 }
 
-async function processOutboxEvent(job: Job<{ outboxEventId: string }>): Promise<void> {
+function shouldCreateInbox(payload: OutboxEventPayload, preference: Awaited<ReturnType<typeof prisma.notificationPreference.findMany>>[number] | null) {
+  if (payload.alwaysCreateInbox) return true;
+  if (!isCategoryAllowed(payload.category, preference, !!payload.bypassPreferences)) return false;
+  if (!payload.bypassPreferences && preference?.inAppEnabled === false) return false;
+  return true;
+}
+
+function shouldCreatePush(payload: OutboxEventPayload, preference: Awaited<ReturnType<typeof prisma.notificationPreference.findMany>>[number] | null) {
+  if (!isCategoryAllowed(payload.category, preference, !!payload.bypassPreferences)) return false;
+  if (!payload.bypassPreferences && preference?.pushEnabled === false) return false;
+  if (!payload.bypassPreferences && isWithinQuietHours(preference, new Date())) return false;
+  return true;
+}
+
+function shouldCreateEmail(payload: OutboxEventPayload, preference: Awaited<ReturnType<typeof prisma.notificationPreference.findMany>>[number] | null) {
+  if (!payload.email) return false;
+  return isCategoryAllowed(payload.category, preference, !!payload.bypassPreferences);
+}
+
+async function createMissingPushDeliveries(
+  notificationByUser: Map<string, string>,
+  candidateUserIds: string[],
+  campaignId: string | null,
+): Promise<number> {
+  if (candidateUserIds.length === 0 || notificationByUser.size === 0) return 0;
+
+  const devices = await prisma.deviceInstallation.findMany({
+    where: { userId: { in: candidateUserIds }, isActive: true, fcmToken: { not: null } },
+    select: { id: true, userId: true },
+  });
+  if (devices.length === 0) return 0;
+
+  const notificationIds = [...notificationByUser.values()];
+  const existing = await prisma.notificationDelivery.findMany({
+    where: {
+      userNotificationId: { in: notificationIds },
+      deviceId: { in: devices.map((device) => device.id) },
+    },
+    select: { userNotificationId: true, deviceId: true },
+  });
+  const existingKeys = new Set(existing.map((row) => `${row.userNotificationId}:${row.deviceId}`));
+
+  const rows = devices
+    .map((device) => {
+      const userNotificationId = notificationByUser.get(device.userId);
+      if (!userNotificationId) return null;
+      const key = `${userNotificationId}:${device.id}`;
+      if (existingKeys.has(key)) return null;
+      return {
+        campaignId,
+        userNotificationId,
+        deviceId: device.id,
+        userId: device.userId,
+        status: 'pending' as const,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+
+  if (rows.length > 0) {
+    await prisma.notificationDelivery.createMany({ data: rows });
+  }
+
+  const deliveries = await prisma.notificationDelivery.findMany({
+    where: {
+      userNotificationId: { in: notificationIds },
+      deviceId: { in: devices.map((device) => device.id) },
+      status: 'pending',
+    },
+    select: { id: true },
+  });
+  for (const delivery of deliveries) {
+    await enqueueDelivery(delivery.id);
+  }
+
+  return rows.length;
+}
+
+async function createMissingEmailDeliveries(
+  notificationByUser: Map<string, string>,
+  candidateUserIds: string[],
+  campaignId: string | null,
+): Promise<number> {
+  if (candidateUserIds.length === 0 || notificationByUser.size === 0) return 0;
+
+  const notificationIds = candidateUserIds
+    .map((userId) => notificationByUser.get(userId))
+    .filter((id): id is string => Boolean(id));
+  if (notificationIds.length === 0) return 0;
+
+  const existing = await prisma.notificationDelivery.findMany({
+    where: {
+      userNotificationId: { in: notificationIds },
+      deviceId: null,
+    },
+    select: { userNotificationId: true },
+  });
+  const existingNotificationIds = new Set(existing.map((row) => row.userNotificationId).filter((id): id is string => Boolean(id)));
+
+  const rows = candidateUserIds
+    .map((userId) => {
+      const userNotificationId = notificationByUser.get(userId);
+      if (!userNotificationId || existingNotificationIds.has(userNotificationId)) return null;
+      return {
+        campaignId,
+        userNotificationId,
+        deviceId: null,
+        userId,
+        status: 'pending' as const,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+
+  if (rows.length > 0) {
+    await prisma.notificationDelivery.createMany({ data: rows });
+  }
+
+  const deliveries = await prisma.notificationDelivery.findMany({
+    where: {
+      userNotificationId: { in: notificationIds },
+      deviceId: null,
+      status: 'pending',
+    },
+    select: { id: true },
+  });
+  for (const delivery of deliveries) {
+    await enqueueDelivery(delivery.id);
+  }
+
+  return rows.length;
+}
+
+export async function processOutboxEvent(job: Job<{ outboxEventId: string }>): Promise<void> {
   const { outboxEventId } = job.data;
 
-  // Claim the row so a concurrent worker (or a retried job that overlaps
-  // with an in-flight attempt) never double-processes the same event.
   const claimed = await prisma.notificationOutboxEvent.updateMany({
     where: { id: outboxEventId, status: { in: ['pending', 'failed'] } },
     data: { status: 'processing', attempts: { increment: 1 } },
@@ -48,26 +176,21 @@ async function processOutboxEvent(job: Job<{ outboxEventId: string }>): Promise<
     if (!isOutboxEventPayload(event.payload)) {
       throw new Error(`Outbox event ${event.id} has malformed payload`);
     }
+
     const payload = event.payload;
     const userIds = await resolveTargetUserIds(payload);
 
-    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
-      const batch = userIds.slice(i, i + BATCH_SIZE);
-
+    for (let index = 0; index < userIds.length; index += BATCH_SIZE) {
+      const batch = userIds.slice(index, index + BATCH_SIZE);
       const preferences = await prisma.notificationPreference.findMany({
         where: { userId: { in: batch } },
       });
-      const preferenceByUser = new Map(preferences.map((p) => [p.userId, p]));
+      const preferenceByUser = new Map(preferences.map((preference) => [preference.userId, preference]));
 
-      const allowedUserIds = batch.filter((userId) => {
-        const pref = preferenceByUser.get(userId) ?? null;
-        if (!isCategoryAllowed(payload.category, pref, !!payload.bypassPreferences)) return false;
-        if (!payload.bypassPreferences && pref?.inAppEnabled === false) return false;
-        return true;
-      });
-      if (allowedUserIds.length === 0) continue;
+      const inboxUserIds = batch.filter((userId) => shouldCreateInbox(payload, preferenceByUser.get(userId) ?? null));
+      if (inboxUserIds.length === 0) continue;
 
-      const rows = allowedUserIds.map((userId) => ({
+      const notificationRows = inboxUserIds.map((userId) => ({
         userId,
         campaignId: payload.campaignId ?? null,
         eventType: event.eventType,
@@ -85,58 +208,27 @@ async function processOutboxEvent(job: Job<{ outboxEventId: string }>): Promise<
         expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null,
       }));
 
-      // (userId, dedupeKey) is unique — re-draining the same event (e.g. a
-      // retried job after a partial failure) never creates duplicate inbox rows.
-      await prisma.userNotification.createMany({ data: rows, skipDuplicates: true });
+      await prisma.userNotification.createMany({ data: notificationRows, skipDuplicates: true });
 
-      const created = await prisma.userNotification.findMany({
-        where: { userId: { in: allowedUserIds }, dedupeKey: event.dedupeKey },
+      const createdNotifications = await prisma.userNotification.findMany({
+        where: { userId: { in: inboxUserIds }, dedupeKey: event.dedupeKey },
         select: { id: true, userId: true },
       });
-      const notificationByUser = new Map(created.map((n) => [n.userId, n.id]));
+      const notificationByUser = new Map(createdNotifications.map((notification) => [notification.userId, notification.id]));
 
-      const pushCandidateUserIds = allowedUserIds.filter((userId) => {
-        const pref = preferenceByUser.get(userId) ?? null;
-        if (!payload.bypassPreferences && pref?.pushEnabled === false) return false;
-        if (isWithinQuietHours(pref, new Date()) && !payload.bypassPreferences) return false;
-        return true;
-      });
-      if (pushCandidateUserIds.length === 0) continue;
+      const pushUserIds = inboxUserIds.filter((userId) => shouldCreatePush(payload, preferenceByUser.get(userId) ?? null));
+      const emailUserIds = inboxUserIds.filter((userId) => shouldCreateEmail(payload, preferenceByUser.get(userId) ?? null));
 
-      const devices = await prisma.deviceInstallation.findMany({
-        where: { userId: { in: pushCandidateUserIds }, isActive: true, fcmToken: { not: null } },
-        select: { id: true, userId: true },
-      });
-      if (devices.length === 0) continue;
+      const [pushCount, emailCount] = await Promise.all([
+        createMissingPushDeliveries(notificationByUser, pushUserIds, payload.campaignId ?? null),
+        createMissingEmailDeliveries(notificationByUser, emailUserIds, payload.campaignId ?? null),
+      ]);
 
-      const deliveryRows = devices.map((d) => ({
-        campaignId: payload.campaignId ?? null,
-        userNotificationId: notificationByUser.get(d.userId) ?? null,
-        deviceId: d.id,
-        userId: d.userId,
-        status: 'pending' as const,
-      }));
-
-      await prisma.notificationDelivery.createMany({ data: deliveryRows });
-
-      const createdDeliveries = await prisma.notificationDelivery.findMany({
-        where: {
-          deviceId: { in: devices.map((d) => d.id) },
-          status: 'pending',
-          userNotificationId: { in: [...notificationByUser.values()] },
-        },
-        select: { id: true },
-      });
-
-      if (payload.campaignId) {
+      if (payload.campaignId && (pushCount > 0 || emailCount > 0)) {
         await prisma.notificationCampaign.update({
           where: { id: payload.campaignId },
-          data: { attemptedCount: { increment: createdDeliveries.length } },
+          data: { attemptedCount: { increment: pushCount + emailCount } },
         });
-      }
-
-      for (const delivery of createdDeliveries) {
-        await enqueueDelivery(delivery.id);
       }
     }
 
@@ -162,7 +254,7 @@ async function processOutboxEvent(job: Job<{ outboxEventId: string }>): Promise<
         nextAttemptAt: new Date(Date.now() + Math.min(2 ** event.attempts, 60) * 1000),
       },
     });
-    throw err; // let BullMQ's own retry/backoff also apply at the job level
+    throw err;
   }
 }
 

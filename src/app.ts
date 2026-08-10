@@ -46,6 +46,7 @@ import doctorsRouter from './modules/doctors/doctors.router';
 import campaignsRouter from './modules/campaigns/campaigns.router';
 import { campaignRegistrationsPublicRouter, campaignRegistrationsAdminRouter } from './modules/campaign-registrations/campaign-registrations.router';
 import campaignScanRouter from './modules/campaign-registrations/campaign-scan.router';
+import { spayNeuterPublicRouter, spayNeuterMeRouter, spayNeuterClinicRouter, spayNeuterAdminRouter } from './modules/spay-neuter/spay-neuter.router';
 import { campaignCheckinVolunteerRouter, campaignCheckinAdminRouter } from './modules/campaign-checkin/campaign-checkin.router';
 import { campaignCertificatesAdminRouter, campaignCertificatesPublicRouter } from './modules/campaign-certificates/campaign-certificates.router';
 import campaignAnalyticsRouter from './modules/analytics/campaign-analytics.router';
@@ -53,6 +54,8 @@ import campaignsPublicRouter from './modules/campaigns/campaigns-public.router';
 import petsPublicRouter from './modules/pets/pets-public.router';
 import { vaccinationAdminRouter, certificateVerifyPublicRouter } from './modules/vaccination/vaccination.router';
 import { homepageAdminRouter, homepagePublicRouter } from './modules/homepage/homepage.router';
+import { homepagePublicContractRouter } from './modules/homepage-public/homepage-public.router';
+import { publicDocumentsRouter } from './modules/homepage-public/public-documents.router';
 import { communityZonesAdminRouter, communityZonesPublicRouter } from './modules/community-zones/community-zones.router';
 import { contributionPlansAdminRouter, contributionPlansPublicRouter } from './modules/contribution-plans/contribution-plans.router';
 import { careContributionsAdminRouter, careContributionsPublicRouter } from './modules/care-contributions/care-contributions.router';
@@ -64,6 +67,10 @@ import { communityFundAdminRouter, communityFundPublicRouter } from './modules/c
 import { carePartnerBenefitsAdminRouter, carePartnerBenefitsPublicRouter } from './modules/care-partner-benefits/care-partner-benefits.router';
 import { socialImpactProgramsAdminRouter, socialImpactProgramsPublicRouter } from './modules/social-impact-programs/social-impact-programs.router';
 import { roadmapItemsAdminRouter, roadmapItemsPublicRouter } from './modules/roadmap-items/roadmap-items.router';
+import { bpaProgramsAdminRouter } from './modules/bpa-programs/bpa-programs.router';
+import { publicDocumentsAdminRouter } from './modules/public-documents-admin/public-documents-admin.router';
+import { appShowcasesAdminRouter } from './modules/app-showcases/app-showcases.router';
+import { platformShowcasesAdminRouter } from './modules/platform-showcases/platform-showcases.router';
 import { diagnosticCenterServicesAdminRouter, diagnosticCenterServicesPublicRouter } from './modules/diagnostic-center-services/diagnostic-center-services.router';
 import { siteSettingsAdminRouter, siteSettingsPublicRouter } from './modules/site-settings/site-settings.router';
 import { communityMembershipAdminRouter, communityMembershipPublicRouter } from './modules/community-membership/community-membership.router';
@@ -217,6 +224,12 @@ app.use(`${v1}/admin`, campaignCertificatesAdminRouter);
 app.use(`${v1}/admin/vaccination`, vaccinationAdminRouter);
 app.use(`${v1}/public/certificates/verify`, certificateVerifyPublicRouter);
 
+// ─── Spay & Neuter Booking System ────────────────────────────
+app.use(`${v1}/public/spay-neuter`, spayNeuterPublicRouter);
+app.use(`${v1}/me/spay-neuter`, spayNeuterMeRouter);
+app.use(`${v1}/clinic/spay-neuter`, spayNeuterClinicRouter);
+app.use(`${v1}/admin/spay-neuter`, spayNeuterAdminRouter);
+
 // ─── Campaign Field Operations (QR, Check-in, Vaccination, Certificates) ──
 app.use(`${v1}/admin/campaigns/:campaignId`, campaignFieldOpsRouter);
 
@@ -242,6 +255,14 @@ app.use(`${v1}/admin/clinics/import`, clinicImportAdminRouter);
 app.use(`${v1}/public/clinics`, clinicsPublicRouter);
 app.use(`${v1}/app`, appPublicRouter);
 app.use(`${v1}/homepage`, homepagePublicRouter);
+// Normalized public homepage data contract (campaigns, spay/neuter,
+// programs, videos, app links, stats, clinics, documents, news) — distinct
+// from `${v1}/homepage/public` above, which serves the CMS-driven
+// hero/sections/footer feed. Neither replaces the other.
+app.use(`${v1}/public/homepage`, homepagePublicContractRouter);
+// Full public governance/document catalog — the supporting page for the
+// homepage's Governance & Transparency teaser.
+app.use(`${v1}/public/documents`, publicDocumentsRouter);
 
 // ─── Community Pet Care (Phase 3) ───────────────────────────────
 app.use(`${v1}/admin/community-zones`, communityZonesAdminRouter);
@@ -266,6 +287,10 @@ app.use(`${v1}/public/care-partner-benefits`, carePartnerBenefitsPublicRouter);
 app.use(`${v1}/admin/social-impact-programs`, socialImpactProgramsAdminRouter);
 app.use(`${v1}/public/social-impact-programs`, socialImpactProgramsPublicRouter);
 app.use(`${v1}/admin/roadmap-items`, roadmapItemsAdminRouter);
+app.use(`${v1}/admin/bpa-programs`, bpaProgramsAdminRouter);
+app.use(`${v1}/admin/public-documents`, publicDocumentsAdminRouter);
+app.use(`${v1}/admin/app-showcases`, appShowcasesAdminRouter);
+app.use(`${v1}/admin/platform-showcases`, platformShowcasesAdminRouter);
 app.use(`${v1}/public/roadmap-items`, roadmapItemsPublicRouter);
 app.use(`${v1}/admin/diagnostic-center-services`, diagnosticCenterServicesAdminRouter);
 app.use(`${v1}/public/diagnostic-center-services`, diagnosticCenterServicesPublicRouter);

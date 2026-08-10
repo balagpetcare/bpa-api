@@ -10,6 +10,7 @@ export const MASTER_SEED_MODULE_ORDER = [
   'membership-reference',
   'donations',
   'cms',
+  'platform-showcases',
   'payments',
   'mail',
   'contact-inquiry',

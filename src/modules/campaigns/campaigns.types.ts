@@ -15,6 +15,7 @@ export const createCampaignSchema = z.object({
   maxPetsPerBooking: z.number().int().min(1).max(50).default(10),
   certificateTemplateId: z.string().uuid().optional(),
   coverImageId: z.string().uuid().optional(),
+  homepageThumbnailMediaId: z.string().uuid().optional(),
   metadata: z.record(z.unknown()).optional(),
   isFeatured: z.boolean().optional(),
   allowedPetTypes: z.array(z.string().min(1).max(30)).optional(),
@@ -35,6 +36,7 @@ export const updateCampaignSchema = z.object({
   maxPetsPerBooking: z.number().int().min(1).max(50).optional(),
   certificateTemplateId: z.string().uuid().optional().nullable(),
   coverImageId: z.string().uuid().optional().nullable(),
+  homepageThumbnailMediaId: z.string().uuid().optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),
   isFeatured: z.boolean().optional(),
   allowedPetTypes: z.array(z.string().min(1).max(30)).optional(),
@@ -67,6 +69,19 @@ export const publicCampaignDiscoverQuerySchema = z.object({
 });
 
 export type PublicCampaignDiscoverQuery = z.infer<typeof publicCampaignDiscoverQuerySchema>;
+
+export const publicCampaignSessionsQuerySchema = z.object({
+  search: z.string().max(255).optional(),
+  divisionId: z.string().uuid().optional(),
+  districtId: z.string().uuid().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  availability: z.enum(['available', 'few_left', 'full', 'registration_closed']).optional(),
+  tab: z.enum(['upcoming', 'past']).optional(),
+  page: z.coerce.number().positive().optional(),
+  limit: z.coerce.number().positive().max(50).optional(),
+});
+
+export type PublicCampaignSessionsQuery = z.infer<typeof publicCampaignSessionsQuerySchema>;
 
 export const createCoverageSchema = z.object({
   locationId: z.string().uuid().optional(),

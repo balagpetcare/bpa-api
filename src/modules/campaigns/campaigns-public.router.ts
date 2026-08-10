@@ -9,8 +9,10 @@ import * as repo from './campaigns.repository';
 import {
   campaignListQuerySchema, publicCampaignVenuesQuerySchema, type PublicCampaignVenuesQuery,
   publicCampaignDiscoverQuerySchema, type PublicCampaignDiscoverQuery,
+  publicCampaignSessionsQuerySchema, type PublicCampaignSessionsQuery,
 } from './campaigns.types';
 import { resolveLocationNamePath } from '../locations/locations.repository';
+import { computeSessionStatus } from './campaign-session-status';
 
 const router = Router();
 
@@ -122,26 +124,146 @@ router.get(
   },
 );
 
+// App Control CTA destinations may carry either the campaign slug or its
+// UUID id (see app-control.service.ts validation) — fall back to an id
+// lookup so both resolve without a second endpoint. Shared by every public
+// per-campaign route below. Full variant — includes the whole `sessions`
+// collection; only use where the caller actually needs it (the classic
+// `GET /:slug` with `includeSessions` defaulted/true).
+async function resolvePublicCampaign(slugOrId: string) {
+  let campaign = await repo.getCampaignBySlug(slugOrId);
+  if (!campaign && isValidUuid(slugOrId)) {
+    campaign = await repo.getCampaignById(slugOrId);
+  }
+  if (!campaign || !PUBLIC_STATUSES.includes(campaign.status as CampaignStatus)) {
+    throw AppError.notFound('Campaign not found');
+  }
+  return campaign;
+}
+
+// Lite variant — same slug/id/status resolution, but never fetches the
+// `sessions` relation at the DB level. Use for any route that only needs
+// campaign metadata/id/status (coverage summary, paginated session list,
+// single-session lookup) — none of these need the raw sessions collection.
+async function resolvePublicCampaignLite(slugOrId: string) {
+  let campaign = await repo.getCampaignBySlugLite(slugOrId);
+  if (!campaign && isValidUuid(slugOrId)) {
+    campaign = await repo.getCampaignByIdLite(slugOrId);
+  }
+  if (!campaign || !PUBLIC_STATUSES.includes(campaign.status as CampaignStatus)) {
+    throw AppError.notFound('Campaign not found');
+  }
+  return campaign;
+}
+
 // GET /api/v1/public/campaigns/:slug
+// `includeSessions=false` returns campaign metadata plus a small bounded
+// `sessionStats` aggregate instead of the (potentially hundreds-long) raw
+// `sessions` array — `sessions` is still present as `[]` so the response
+// shape stays stable for consumers that don't opt in to the lite form.
+// Default (param omitted or any value other than the literal "false")
+// preserves the exact original full-payload behaviour for every existing
+// consumer (mobile app, registration/waitlist flows that request it, etc).
 router.get(
   '/:slug',
   publicReadLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // App Control CTA destinations may carry either the campaign slug or
-      // its UUID id (see app-control.service.ts validation) — fall back to
-      // an id lookup so both resolve without a second endpoint.
-      let campaign = await repo.getCampaignBySlug(req.params.slug);
-      if (!campaign && isValidUuid(req.params.slug)) {
-        campaign = await repo.getCampaignById(req.params.slug);
+      const includeSessions = req.query.includeSessions !== 'false';
+
+      if (!includeSessions) {
+        const campaign = await resolvePublicCampaignLite(req.params.slug);
+        const sessionStats = await repo.getCampaignSessionStats(campaign.id);
+        sendSuccess(res, { ...campaign, sessions: [], sessionStats });
+        return;
       }
-      if (!campaign || !PUBLIC_STATUSES.includes(campaign.status as CampaignStatus)) {
-        throw AppError.notFound('Campaign not found');
-      }
+
+      const campaign = await resolvePublicCampaign(req.params.slug);
       const withPaths = await withVenueLocationPaths(campaign);
       const locationId = typeof req.query.locationId === 'string' ? req.query.locationId : undefined;
       const filtered = locationId ? await repo.filterSessionsByBestTier(withPaths, locationId) : withPaths;
       sendSuccess(res, filtered);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/v1/public/campaigns/:slug/coverage — compact divisions/districts/
+// venues/sessions/capacity summary + a bounded Division -> District -> Venue
+// tree, so the public page never has to derive coverage from a full session
+// dump on the client.
+router.get(
+  '/:slug/coverage',
+  publicReadLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const campaign = await resolvePublicCampaignLite(req.params.slug);
+      const summary = await repo.getCampaignCoverageSummary(campaign.id);
+      sendSuccess(res, summary);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/v1/public/campaigns/:slug/sessions — searchable/filterable/
+// paginated session list backing the "Sessions & Venues" UI and the
+// Register/Waitlist session pickers. Defaults to upcoming sessions, soonest
+// first; never returns more than `limit` rows.
+router.get(
+  '/:slug/sessions',
+  publicReadLimiter,
+  validate(publicCampaignSessionsQuerySchema, 'query'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const campaign = await resolvePublicCampaignLite(req.params.slug);
+      const query = req.query as never as PublicCampaignSessionsQuery;
+      const result = await repo.listCampaignSessions(campaign.id, campaign.status as CampaignStatus, query);
+      sendSuccess(res, result.items, 200, result.meta);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/v1/public/campaigns/:slug/sessions/:sessionId — resolves exactly
+// one session by its canonical UUID. Backs `?session=<id>` deep links
+// (Register/Waitlist) so resuming a specific session never requires
+// downloading every session in the campaign to find it.
+router.get(
+  '/:slug/sessions/:sessionId',
+  publicReadLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!isValidUuid(req.params.sessionId)) {
+        throw AppError.notFound('Session not found');
+      }
+      const campaign = await resolvePublicCampaignLite(req.params.slug);
+      const session = await repo.getCampaignSessionById(campaign.id, req.params.sessionId);
+      if (!session) {
+        throw AppError.notFound('Session not found');
+      }
+      const status = computeSessionStatus(session, { status: campaign.status as CampaignStatus });
+      sendSuccess(res, {
+        id: session.id,
+        sessionDate: session.sessionDate,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        capacity: session.capacity,
+        bookedCount: session.bookedCount,
+        isActive: session.isActive,
+        notes: session.notes,
+        status,
+        venue: session.venue ? {
+          id: session.venue.id,
+          name: session.venue.name,
+          address: session.venue.address,
+          googleMapsUrl: session.venue.googleMapsUrl,
+          locationId: session.venue.locationId,
+          locationLabel: repo.venueLocationLabel(session.venue),
+        } : null,
+      });
     } catch (err) {
       next(err);
     }

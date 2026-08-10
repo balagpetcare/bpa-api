@@ -82,6 +82,12 @@ export const RESOURCES = {
   CONTACT_INQUIRIES: 'contact_inquiries',
   CONTACT_INQUIRY_CONFIG: 'contact_inquiry_config',
   CONTENT: 'content',
+  // Donations module — resource strings already granted to admin/super_admin
+  // in prisma/seed/roles-permissions.seed.ts; these are just the named
+  // constants for them (no seed/DB change).
+  DONATIONS: 'donations',
+  DONATION_PURPOSES: 'donation_purposes',
+  DONATION_CAMPAIGNS: 'donation_campaigns',
   APP_CONTROL: 'app_control',
   PARTNER_CLINICS: 'partner_clinics',
   CLINIC_ORGANIZATIONS: 'clinic_organizations',
@@ -90,6 +96,19 @@ export const RESOURCES = {
   // Admin Notification & Dashboard
   NOTIFICATIONS: 'notifications',
   DASHBOARD: 'dashboard',
+  // Spay & Neuter Booking System
+  SPAY_OFFERS: 'spay_offers',
+  SPAY_CLINICS: 'spay_clinics',
+  SPAY_SLOTS: 'spay_slots',
+  SPAY_BOOKINGS: 'spay_bookings',
+  SPAY_CHECKIN: 'spay_checkin',
+  SPAY_REFUNDS: 'spay_refunds',
+  SPAY_REPORTS: 'spay_reports',
+  // Institutional homepage rebuild — CMS content models with no existing
+  // management surface.
+  BPA_PROGRAMS: 'bpa_programs',
+  APP_SHOWCASES: 'app_showcases',
+  PUBLIC_DOCUMENTS: 'public_documents',
 } as const;
 
 export const ACTIONS = {
@@ -106,6 +125,8 @@ export const ACTIONS = {
   LIFECYCLE: 'lifecycle',
   ARCHIVE: 'archive',
   RESTORE: 'restore',
+  // Spay & Neuter-specific
+  APPROVE: 'approve',
 } as const;
 
 export const ROLES = {
@@ -119,6 +140,10 @@ export const ROLES = {
   // Community Pet Care
   COMMUNITY_FUND_ADMIN: 'community_fund_admin',
   COMMUNITY_FUND_VIEWER: 'community_fund_viewer',
+  // Spay & Neuter clinic roles
+  CLINIC_ADMIN: 'clinic_admin',
+  CLINIC_VET: 'clinic_vet',
+  CLINIC_FRONT_DESK: 'clinic_front_desk',
 } as const;
 
 export const HTTP_STATUS = {
@@ -133,6 +158,7 @@ export const HTTP_STATUS = {
   UNPROCESSABLE: 422,
   TOO_MANY_REQUESTS: 429,
   INTERNAL_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
 } as const;
 
 export const ERROR_CODES = {

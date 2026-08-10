@@ -4,6 +4,8 @@ import { config } from './config';
 import app from './app';
 import { prisma } from './database/prisma';
 import { startCampaignCleanupJob } from './jobs/campaign-cleanup.job';
+import { startSpayPaymentPendingCleanupJob } from './jobs/spay-payment-pending-cleanup.job';
+import { startSpayHoldCleanupJob } from './jobs/spay-hold-cleanup.job';
 import { startMailSyncJob } from './jobs/mail-sync.job';
 import { startMembershipExpiryJob } from './jobs/membership-expiry.job';
 import { checkStorageHealth } from './storage/storage.service';
@@ -27,6 +29,8 @@ async function bootstrap(): Promise<void> {
 
   validateEPSStartup();
   const cleanupTimer = startCampaignCleanupJob();
+  const spayPaymentPendingTimer = startSpayPaymentPendingCleanupJob();
+  const spayHoldTimer = startSpayHoldCleanupJob();
   const syncTimer = startMailSyncJob();
   startMembershipExpiryJob();
 
@@ -40,6 +44,8 @@ async function bootstrap(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`\nReceived ${signal}. Shutting down gracefully...`);
     clearInterval(cleanupTimer);
+    clearInterval(spayPaymentPendingTimer);
+    clearInterval(spayHoldTimer);
     clearInterval(syncTimer);
     server.close(async () => {
       await prisma.$disconnect();

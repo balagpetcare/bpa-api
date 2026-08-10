@@ -3,16 +3,19 @@ import { prisma } from '../../database/prisma';
 import { parsePaginationQuery, buildPaginationMeta } from '../../utils/response';
 import { getAncestorChain, buildLocationTierIds } from '../locations/locations.repository';
 import { withFileMeta } from '../../utils/fileType';
+import { computeSessionStatus, todayInDhaka, type SessionAvailability } from './campaign-session-status';
 import type {
   CreateCampaignDto, UpdateCampaignDto, CampaignListQuery,
   CreateSessionDto, UpdateSessionDto,
   CreateServiceDto, UpdateServiceDto,
   AssignDoctorDto, UpdateDoctorAssignmentDto, BulkAssignDoctorDto, AssignVolunteerDto,
+  PublicCampaignSessionsQuery,
 } from './campaigns.types';
 
 const campaignInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
   coverImage: { select: { id: true, url: true, altText: true } },
+  homepageThumbnailMedia: { select: { id: true, url: true, altText: true } },
   _count: { select: { sessions: true, services: true, doctors: true, volunteers: true, registrations: true } },
   media: {
     where: { role: { in: ['thumbnail', 'hero', 'mobile_banner'] } } as any,
@@ -31,6 +34,7 @@ const campaignInclude = {
 const campaignDetailInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
   coverImage: { select: { id: true, url: true, altText: true } },
+  homepageThumbnailMedia: { select: { id: true, url: true, altText: true } },
   certificateTemplate: { select: { id: true, name: true } },
   media: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,6 +75,13 @@ const campaignDetailInclude = {
   _count: { select: { registrations: true, sessions: true, services: true, doctors: true, volunteers: true } },
 } as const;
 
+// Same shape as campaignDetailInclude but WITHOUT the (potentially
+// hundreds-long) `sessions` relation — the DB never even fetches session
+// rows for this variant. Used by the public campaign page, which only
+// needs metadata (title/description/pricing/services/media/faq) plus small
+// aggregate stats (see getCampaignSessionStats), not every raw session.
+const { sessions: _sessionsIncludeOmitted, ...campaignDetailIncludeLite } = campaignDetailInclude;
+
 // Adds derived `extension`/`fileCategory` to every media item's nested
 // mediaFile so API consumers — the Flutter app's hero/gallery rendering
 // in particular — can pick the right preview widget without re-deriving
@@ -106,6 +117,7 @@ export async function createCampaign(dto: CreateCampaignDto, slug: string, creat
       maxPetsPerBooking: dto.maxPetsPerBooking,
       certificateTemplateId: dto.certificateTemplateId,
       coverImageId: dto.coverImageId,
+      homepageThumbnailMediaId: dto.homepageThumbnailMediaId,
       metadata: dto.metadata as Prisma.InputJsonValue ?? Prisma.JsonNull,
       isFeatured: dto.isFeatured,
       allowedPetTypes: dto.allowedPetTypes ?? [],
@@ -318,6 +330,336 @@ export async function deleteCoverage(id: string) {
   return prisma.campaignCoverage.delete({ where: { id } });
 }
 
+// ─── Public coverage summary ────────────────────────────────────────
+// "Campaign Coverage" widget on the public campaign page: compact
+// divisions/districts/venues/sessions/capacity metrics plus a bounded
+// Division -> District -> Venue tree for the "Explore Coverage" drawer.
+// Deliberately does NOT touch the (potentially hundreds-long) sessions
+// list beyond per-venue counts — one bounded venues query only.
+
+const FALLBACK_AREA_LABEL = 'Additional Locations';
+
+interface CoverageVenueRow {
+  id: string;
+  name: string;
+  address: string;
+  divisionId: string | null;
+  districtId: string | null;
+  zone: {
+    name: string;
+    cityCorporation: {
+      name: string;
+      district: { name: string; division: { name: string } | null } | null;
+    } | null;
+  } | null;
+  campaignSessions: Array<{ capacity: number; bookedCount: number; isActive: boolean; sessionDate: Date }>;
+}
+
+export interface CoverageVenueSummary {
+  id: string;
+  name: string;
+  address: string;
+  sessionCount: number;
+  capacity: number;
+  bookedCount: number;
+}
+
+export interface CoverageDistrictSummary {
+  id: string | null;
+  name: string;
+  venues: CoverageVenueSummary[];
+}
+
+export interface CoverageDivisionSummary {
+  id: string | null;
+  name: string;
+  districts: CoverageDistrictSummary[];
+}
+
+export interface CampaignCoverageSummary {
+  divisionsCovered: number;
+  districtsCovered: number;
+  venues: number;
+  sessions: number;
+  totalCapacity: number;
+  bookedCount: number;
+  availableSlots: number;
+  breakdown: CoverageDivisionSummary[];
+}
+
+// Resolves the best available human-readable division/district name for a
+// venue: unified Location tree first (authoritative, indexed), falling back
+// to the legacy Zone -> CityCorporation -> District -> Division chain for
+// older venues that predate the unified tree. Never returns "Unknown" —
+// venues with no resolvable area at all fall into a clearly-labeled bucket
+// that is excluded from the districtsCovered/divisionsCovered counts.
+function resolveVenueArea(
+  venue: CoverageVenueRow,
+  locationNameById: Map<string, string>,
+): { divisionId: string | null; divisionName: string; districtId: string | null; districtName: string; isResolved: boolean } {
+  const unifiedDivisionName = venue.divisionId ? locationNameById.get(venue.divisionId) : undefined;
+  const unifiedDistrictName = venue.districtId ? locationNameById.get(venue.districtId) : undefined;
+
+  if (unifiedDistrictName) {
+    return {
+      divisionId: venue.divisionId,
+      divisionName: unifiedDivisionName ?? FALLBACK_AREA_LABEL,
+      districtId: venue.districtId,
+      districtName: unifiedDistrictName,
+      isResolved: true,
+    };
+  }
+
+  const legacyDistrict = venue.zone?.cityCorporation?.district;
+  if (legacyDistrict) {
+    return {
+      divisionId: null,
+      divisionName: legacyDistrict.division?.name ?? FALLBACK_AREA_LABEL,
+      districtId: null,
+      districtName: legacyDistrict.name,
+      isResolved: true,
+    };
+  }
+
+  // City corporation / zone name is still meaningfully human-readable even
+  // without a resolvable district — prefer it over the generic bucket.
+  const bestEffortName = venue.zone?.cityCorporation?.name ?? venue.zone?.name ?? null;
+  return {
+    divisionId: null,
+    divisionName: FALLBACK_AREA_LABEL,
+    districtId: null,
+    districtName: bestEffortName ?? FALLBACK_AREA_LABEL,
+    isResolved: false,
+  };
+}
+
+export async function getCampaignCoverageSummary(campaignId: string): Promise<CampaignCoverageSummary> {
+  const venues = await prisma.venue.findMany({
+    where: { campaignSessions: { some: { campaignId } } },
+    select: {
+      id: true, name: true, address: true, divisionId: true, districtId: true,
+      zone: {
+        select: {
+          name: true,
+          cityCorporation: {
+            select: { name: true, district: { select: { name: true, division: { select: { name: true } } } } },
+          },
+        },
+      },
+      campaignSessions: {
+        where: { campaignId, isActive: true },
+        select: { capacity: true, bookedCount: true, isActive: true, sessionDate: true },
+      },
+    },
+  }) as unknown as CoverageVenueRow[];
+
+  const locationIds = Array.from(new Set(
+    venues.flatMap((v) => [v.divisionId, v.districtId]).filter((id): id is string => Boolean(id)),
+  ));
+  const locations = locationIds.length
+    ? await prisma.location.findMany({ where: { id: { in: locationIds } }, select: { id: true, nameEn: true } })
+    : [];
+  const locationNameById = new Map(locations.map((l) => [l.id, l.nameEn]));
+
+  const divisionMap = new Map<string, CoverageDivisionSummary>();
+  const districtKeyToDivisionKey = new Map<string, string>();
+  const resolvedDivisionIds = new Set<string>();
+  const resolvedDistrictIds = new Set<string>();
+
+  let sessions = 0;
+  let totalCapacity = 0;
+  let bookedCount = 0;
+
+  for (const venue of venues) {
+    const area = resolveVenueArea(venue, locationNameById);
+    const divisionKey = area.divisionId ?? area.divisionName;
+    const districtKey = area.districtId ?? `${divisionKey}::${area.districtName}`;
+    districtKeyToDivisionKey.set(districtKey, divisionKey);
+
+    if (area.isResolved) {
+      if (area.divisionId) resolvedDivisionIds.add(area.divisionId);
+      if (area.districtId) resolvedDistrictIds.add(area.districtId);
+    }
+
+    if (!divisionMap.has(divisionKey)) {
+      divisionMap.set(divisionKey, { id: area.divisionId, name: area.divisionName, districts: [] });
+    }
+    const division = divisionMap.get(divisionKey)!;
+    let district = division.districts.find((d) => (d.id ?? `${divisionKey}::${d.name}`) === districtKey);
+    if (!district) {
+      district = { id: area.districtId, name: area.districtName, venues: [] };
+      division.districts.push(district);
+    }
+
+    const venueCapacity = venue.campaignSessions.reduce((a, s) => a + s.capacity, 0);
+    const venueBooked = venue.campaignSessions.reduce((a, s) => a + s.bookedCount, 0);
+    district.venues.push({
+      id: venue.id,
+      name: venue.name,
+      address: venue.address,
+      sessionCount: venue.campaignSessions.length,
+      capacity: venueCapacity,
+      bookedCount: venueBooked,
+    });
+
+    sessions += venue.campaignSessions.length;
+    totalCapacity += venueCapacity;
+    bookedCount += venueBooked;
+  }
+
+  return {
+    divisionsCovered: resolvedDivisionIds.size,
+    districtsCovered: resolvedDistrictIds.size,
+    venues: venues.length,
+    sessions,
+    totalCapacity,
+    bookedCount,
+    availableSlots: Math.max(0, totalCapacity - bookedCount),
+    breakdown: Array.from(divisionMap.values()),
+  };
+}
+
+// ─── Public paginated session list ──────────────────────────────────
+// Backs the "Sessions & Venues" search/filter/pagination UI — server-side
+// filtering + pagination via the project's standard page/limit convention
+// (see utils/response.ts), never a full-campaign session dump.
+
+export interface PublicSessionListItem {
+  id: string;
+  sessionDate: Date;
+  startTime: string;
+  endTime: string;
+  capacity: number;
+  bookedCount: number;
+  isActive: boolean;
+  notes: string | null;
+  status: SessionAvailability;
+  venue: {
+    id: string;
+    name: string;
+    address: string;
+    googleMapsUrl: string | null;
+    locationLabel: string;
+  } | null;
+}
+
+// Best available single human-readable location line for a session card —
+// unified Location tree first, then the legacy Zone/CityCorporation chain,
+// then the venue's free-text address. Never "Unknown".
+export function venueLocationLabel(venue: {
+  location?: { nameEn: string } | null;
+  zone?: { name: string; cityCorporation?: { name: string } | null } | null;
+  address: string;
+} | null): string {
+  if (!venue) return 'Venue to be announced';
+  if (venue.location?.nameEn) return venue.location.nameEn;
+  if (venue.zone?.name) {
+    return venue.zone.cityCorporation?.name ? `${venue.zone.name}, ${venue.zone.cityCorporation.name}` : venue.zone.name;
+  }
+  return venue.address || 'Location details pending';
+}
+
+export async function listCampaignSessions(campaignId: string, campaignStatus: CampaignStatus, query: PublicCampaignSessionsQuery) {
+  const { page, limit, skip } = parsePaginationQuery(query.page, query.limit, 8);
+  const tab = query.tab ?? 'upcoming';
+  const cutoff = todayInDhaka();
+
+  const where: Prisma.CampaignSessionWhereInput = {
+    campaignId,
+    sessionDate: tab === 'past' ? { lt: cutoff } : { gte: cutoff },
+  };
+  if (query.divisionId || query.districtId || query.search) {
+    where.venue = {
+      ...(query.divisionId ? { divisionId: query.divisionId } : {}),
+      ...(query.districtId ? { districtId: query.districtId } : {}),
+      ...(query.search ? {
+        OR: [
+          { name: { contains: query.search, mode: 'insensitive' } },
+          { address: { contains: query.search, mode: 'insensitive' } },
+          { location: { nameEn: { contains: query.search, mode: 'insensitive' } } },
+        ],
+      } : {}),
+    };
+  }
+  if (query.date) {
+    const d = new Date(`${query.date}T00:00:00.000Z`);
+    where.sessionDate = d;
+  }
+
+  const orderBy: Prisma.CampaignSessionOrderByWithRelationInput[] = tab === 'past'
+    ? [{ sessionDate: 'desc' }, { startTime: 'desc' }]
+    : [{ sessionDate: 'asc' }, { startTime: 'asc' }];
+
+  const venueSelect = {
+    id: true, name: true, address: true, googleMapsUrl: true,
+    location: { select: { nameEn: true } },
+    zone: { select: { name: true, cityCorporation: { select: { name: true } } } },
+  } as const;
+
+  // `availability` is derived from capacity/bookedCount/date/campaign-status
+  // rather than a single indexed column, so it can't be pushed into the SQL
+  // `where` as cheaply as the other filters. It's applied as a post-filter
+  // over the date/search/division/district-narrowed candidate set instead —
+  // acceptable at the campaign scale this queries (hundreds, not millions,
+  // of sessions per campaign/date/area combination). If profiling ever
+  // shows this matters, `capacity`/`bookedCount` are plain integer columns
+  // and the comparison can move into a raw SQL WHERE clause.
+  if (query.availability) {
+    const candidates = await prisma.campaignSession.findMany({
+      where, orderBy,
+      select: {
+        id: true, sessionDate: true, startTime: true, endTime: true, capacity: true, bookedCount: true,
+        isActive: true, notes: true, venue: { select: venueSelect },
+      },
+    });
+    const withStatus = candidates
+      .map((s) => ({ ...s, status: computeSessionStatus(s, { status: campaignStatus }) }))
+      .filter((s) => s.status === query.availability);
+    const total = withStatus.length;
+    const items = withStatus.slice(skip, skip + limit).map(toSessionListItem);
+    return { items, meta: buildPaginationMeta(total, page, limit) };
+  }
+
+  const [rows, total] = await Promise.all([
+    prisma.campaignSession.findMany({
+      where, orderBy, skip, take: limit,
+      select: {
+        id: true, sessionDate: true, startTime: true, endTime: true, capacity: true, bookedCount: true,
+        isActive: true, notes: true, venue: { select: venueSelect },
+      },
+    }),
+    prisma.campaignSession.count({ where }),
+  ]);
+
+  const items = rows.map((s) => toSessionListItem({ ...s, status: computeSessionStatus(s, { status: campaignStatus }) }));
+  return { items, meta: buildPaginationMeta(total, page, limit) };
+}
+
+function toSessionListItem(s: {
+  id: string; sessionDate: Date; startTime: string; endTime: string; capacity: number; bookedCount: number;
+  isActive: boolean; notes: string | null; status: SessionAvailability;
+  venue: { id: string; name: string; address: string; googleMapsUrl: string | null; location: { nameEn: string } | null; zone: { name: string; cityCorporation: { name: string } | null } | null } | null;
+}): PublicSessionListItem {
+  return {
+    id: s.id,
+    sessionDate: s.sessionDate,
+    startTime: s.startTime,
+    endTime: s.endTime,
+    capacity: s.capacity,
+    bookedCount: s.bookedCount,
+    isActive: s.isActive,
+    notes: s.notes,
+    status: s.status,
+    venue: s.venue ? {
+      id: s.venue.id,
+      name: s.venue.name,
+      address: s.venue.address,
+      googleMapsUrl: s.venue.googleMapsUrl,
+      locationLabel: venueLocationLabel(s.venue),
+    } : null,
+  };
+}
+
 type VenueTierField = 'wardId' | 'cityZoneId' | 'cityCorporationId' | 'districtId' | 'unionId' | 'upazilaId' | 'divisionId';
 
 interface TierCandidate {
@@ -430,6 +772,108 @@ export async function getCampaignBySlug(slug: string) {
   return withCampaignMediaMeta(campaign);
 }
 
+export async function getCampaignByIdLite(id: string) {
+  const campaign = await prisma.campaign.findUnique({ where: { id }, include: campaignDetailIncludeLite });
+  return withCampaignMediaMeta(campaign);
+}
+
+export async function getCampaignBySlugLite(slug: string) {
+  const campaign = await prisma.campaign.findUnique({ where: { slug }, include: campaignDetailIncludeLite });
+  return withCampaignMediaMeta(campaign);
+}
+
+// ─── Session aggregate stats (for the lite campaign detail response) ────
+// Everything the public page needs to render hero/capacity stats WITHOUT
+// downloading the raw sessions collection — all bounded queries (counts/
+// aggregates/a capped lookahead/a capped day-group), never proportional to
+// the campaign's total session count.
+
+export interface CampaignSessionStats {
+  sessionCount: number;
+  totalCapacity: number;
+  totalBooked: number;
+  totalAvailable: number;
+  venueCount: number;
+  nextSession: { sessionDate: Date; startTime: string; endTime: string; venueName: string | null } | null;
+  dayBreakdown: Array<{ date: string; capacity: number; bookedCount: number }>;
+  hasMoreDays: boolean;
+}
+
+const MAX_DAY_BREAKDOWN_ROWS = 30;
+// How many of the soonest active/future sessions to scan for the first one
+// that still has an open slot — small and fixed, not proportional to the
+// campaign's total session count.
+const NEXT_SESSION_LOOKAHEAD = 20;
+
+export async function getCampaignSessionStats(campaignId: string): Promise<CampaignSessionStats> {
+  const cutoff = todayInDhaka();
+
+  const [sessionCount, aggregate, venueCount, upcomingCandidates, dayGroups] = await Promise.all([
+    prisma.campaignSession.count({ where: { campaignId } }),
+    prisma.campaignSession.aggregate({ where: { campaignId }, _sum: { capacity: true, bookedCount: true } }),
+    prisma.venue.count({ where: { campaignSessions: { some: { campaignId } } } }),
+    prisma.campaignSession.findMany({
+      where: { campaignId, isActive: true, sessionDate: { gte: cutoff } },
+      orderBy: [{ sessionDate: 'asc' }, { startTime: 'asc' }],
+      take: NEXT_SESSION_LOOKAHEAD,
+      select: { sessionDate: true, startTime: true, endTime: true, capacity: true, bookedCount: true, venue: { select: { name: true } } },
+    }),
+    prisma.campaignSession.groupBy({
+      by: ['sessionDate'],
+      where: { campaignId },
+      _sum: { capacity: true, bookedCount: true },
+      orderBy: { sessionDate: 'asc' },
+      take: MAX_DAY_BREAKDOWN_ROWS + 1,
+    }),
+  ]);
+
+  const nextSessionRow = upcomingCandidates.find((s) => s.bookedCount < s.capacity) ?? null;
+  const totalCapacity = aggregate._sum.capacity ?? 0;
+  const totalBooked = aggregate._sum.bookedCount ?? 0;
+
+  return {
+    sessionCount,
+    totalCapacity,
+    totalBooked,
+    totalAvailable: Math.max(0, totalCapacity - totalBooked),
+    venueCount,
+    nextSession: nextSessionRow ? {
+      sessionDate: nextSessionRow.sessionDate,
+      startTime: nextSessionRow.startTime,
+      endTime: nextSessionRow.endTime,
+      venueName: nextSessionRow.venue?.name ?? null,
+    } : null,
+    dayBreakdown: dayGroups.slice(0, MAX_DAY_BREAKDOWN_ROWS).map((g) => ({
+      date: g.sessionDate.toISOString().slice(0, 10),
+      capacity: g._sum.capacity ?? 0,
+      bookedCount: g._sum.bookedCount ?? 0,
+    })),
+    hasMoreDays: dayGroups.length > MAX_DAY_BREAKDOWN_ROWS,
+  };
+}
+
+// ─── Single-session lookup ───────────────────────────────────────────
+// Resolves exactly one session by its canonical UUID, scoped to the given
+// campaign — used to resume a `?session=<id>` deep link (Register/Waitlist)
+// without downloading every session in the campaign just to find one row.
+
+export async function getCampaignSessionById(campaignId: string, sessionId: string) {
+  return prisma.campaignSession.findFirst({
+    where: { id: sessionId, campaignId },
+    select: {
+      id: true, sessionDate: true, startTime: true, endTime: true, capacity: true, bookedCount: true,
+      isActive: true, notes: true,
+      venue: {
+        select: {
+          id: true, name: true, address: true, googleMapsUrl: true, locationId: true,
+          location: { select: { nameEn: true } },
+          zone: { select: { name: true, cityCorporation: { select: { name: true } } } },
+        },
+      },
+    },
+  });
+}
+
 export async function updateCampaign(id: string, dto: UpdateCampaignDto) {
   const data: Prisma.CampaignUpdateInput = {
     title: dto.title,
@@ -446,6 +890,11 @@ export async function updateCampaign(id: string, dto: UpdateCampaignDto) {
     ...(dto.coverImageId !== undefined && {
       coverImage: dto.coverImageId
         ? { connect: { id: dto.coverImageId } }
+        : { disconnect: true },
+    }),
+    ...(dto.homepageThumbnailMediaId !== undefined && {
+      homepageThumbnailMedia: dto.homepageThumbnailMediaId
+        ? { connect: { id: dto.homepageThumbnailMediaId } }
         : { disconnect: true },
     }),
   };

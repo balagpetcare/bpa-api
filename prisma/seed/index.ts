@@ -12,6 +12,7 @@ import { seedCommunity } from './community.seed';
 import { seedMembershipReferenceData } from './membership-reference.seed';
 import { seedDonations } from './donations.seed';
 import { seedCms } from './cms.seed';
+import { seedPlatformShowcases } from './platform-showcases.seed';
 import { seedPayments } from './payments.seed';
 import { seedMailSystem } from './mail.seed';
 import { seedContactInquiryConfig } from './contact-inquiry.seed';
@@ -72,6 +73,8 @@ const CRITICAL_MODEL_COUNTS: Array<{ label: string; delegate: string }> = [
   { label: 'Footer configs', delegate: 'footerConfig' },
   { label: 'Footer link groups', delegate: 'footerLinkGroup' },
   { label: 'Footer links', delegate: 'footerLink' },
+  { label: 'Platform showcases', delegate: 'platformShowcaseSection' },
+  { label: 'Platform showcase items', delegate: 'platformShowcaseItem' },
   { label: 'Payment placeholders', delegate: 'petSmartSyncSetting' },
   { label: 'Email layouts', delegate: 'emailLayoutSetting' },
   { label: 'Mail accounts', delegate: 'mailAccount' },
@@ -127,13 +130,13 @@ async function main() {
   console.log(` Started: ${new Date().toISOString()}`);
   console.log(line('═'));
 
-  section('1/19 Roles & Permissions');
+  section('1/21 Roles & Permissions');
   const roles = await seedRolesAndPermissions(prisma);
   console.log(`  Permissions      ${roles.permissions.total}`);
   console.log(`  Roles            ${roles.roles.upserted}`);
   console.log(`  Role mappings    ${roles.mappings.upserted}`);
 
-  section('2/19 Admin User');
+  section('2/21 Admin User');
   const admin = await seedAdminUser(prisma);
   if (admin.skipped) {
     console.log(`  Skipped          ${admin.reason}`);
@@ -142,11 +145,11 @@ async function main() {
     console.log(`  Admin role       ${admin.role}`);
   }
 
-  section('3/19 Site Settings');
+  section('3/21 Site Settings');
   const site = await seedSiteSettings(prisma);
   console.log(`  Upserted         ${site.upserted}`);
 
-  section('4/19 Location Hierarchy');
+  section('4/21 Location Hierarchy');
   const locations = await seedLocations(prisma);
   console.log(`  Country          ${locations.country}`);
   console.log(`  Divisions        ${locations.divisions}`);
@@ -154,7 +157,7 @@ async function main() {
   console.log(`  City corps       ${locations.cityCorporations}`);
   console.log(`  Zones            ${locations.zones}`);
 
-  section('5/19 Location Nodes');
+  section('5/21 Location Nodes');
   const locationNodes = await seedLocationNodes(prisma);
   console.log(`  Divisions        ${locationNodes.divisions}`);
   console.log(`  Districts        ${locationNodes.districts}`);
@@ -164,7 +167,7 @@ async function main() {
   console.log(`  Unions           ${locationNodes.unions}`);
   console.log(`  Wards            ${locationNodes.wards}`);
 
-  section('6/19 Campaigns & Vaccines');
+  section('6/21 Campaigns & Vaccines');
   const campaigns = await seedCampaigns(prisma);
   console.log(`  Vaccines         ${campaigns.vaccines.created} created, ${campaigns.vaccines.skipped} existing`);
   console.log(`  Cert template    ${campaigns.certTemplate}`);
@@ -172,11 +175,11 @@ async function main() {
   console.log(`  Services         ${campaigns.services}`);
   console.log(`  Sessions         ${campaigns.sessions}`);
 
-  section('7/19 Campaign Coverages');
+  section('7/21 Campaign Coverages');
   const coverages = await seedCampaignCoverages(prisma);
   console.log(`  Coverage rows    ${coverages.coverages}`);
 
-  section('8/19 Community & Membership Engine');
+  section('8/21 Community & Membership Engine');
   const community = await seedCommunity(prisma);
   console.log(`  Community zones  ${community.zones}`);
   console.log(`  Contribution plan${community.contributionPlan}`);
@@ -191,13 +194,13 @@ async function main() {
   console.log(`  Social impact    ${community.socialImpact}`);
   console.log(`  Roadmap items    ${community.roadmap}`);
 
-  section('9/19 Membership Reference Data');
+  section('9/21 Membership Reference Data');
   const membershipRefs = await seedMembershipReferenceData(prisma);
   console.log(`  Benefit rows     ${membershipRefs.benefits}`);
   console.log(`  Plan links       ${membershipRefs.planBenefits}`);
   console.log(`  FAQ rows         ${membershipRefs.faqs}`);
 
-  section('10/19 Donation System');
+  section('10/21 Donation System');
   const donations = await seedDonations(prisma);
   console.log(`  Purposes         ${donations.purposes}`);
   console.log(`  Campaigns        ${donations.campaigns}`);
@@ -206,7 +209,7 @@ async function main() {
   console.log(`  Page settings    ${donations.pageSetting}`);
   console.log(`  Transparency     ${donations.transparency}`);
 
-  section('11/19 CMS');
+  section('11/21 CMS');
   const cms = await seedCms(prisma);
   console.log(`  News categories  ${cms.categories}`);
   console.log(`  News tags        ${cms.tags}`);
@@ -216,23 +219,28 @@ async function main() {
   console.log(`  Footer config    ${cms.footer}`);
   console.log(`  Pet census setup ${cms.petCensus}`);
 
-  section('12/19 Payment Settings');
+  section('12/21 Platform Showcase Drafts');
+  const platformShowcases = await seedPlatformShowcases(prisma);
+  console.log(`  Sections         ${platformShowcases.section}`);
+  console.log(`  Items            ${platformShowcases.items} (${platformShowcases.created} created)`);
+
+  section('13/21 Payment Settings');
   const payments = await seedPayments(prisma);
   console.log(`  PSS settings     ${payments.pssSettings.upserted}`);
 
-  section('13/19 Mail System');
+  section('14/21 Mail System');
   const mail = await seedMailSystem(prisma);
   console.log(`  Email layouts    ${mail.emailLayouts}`);
   console.log(`  Mail accounts    ${mail.mailAccounts}`);
 
-  section('14/19 Contact Inquiry Config');
+  section('15/21 Contact Inquiry Config');
   const contact = await seedContactInquiryConfig(prisma);
   console.log(`  Contact types    ${contact.types.created} created, ${contact.types.skipped} existing`);
   console.log(`  Categories       ${contact.categories.created} created, ${contact.categories.skipped} existing`);
   console.log(`  Departments      ${contact.departments.upserted}`);
   console.log(`  Priority rules   ${contact.priorityRules.upserted}`);
 
-  section('15/19 Clinic Directory');
+  section('16/21 Clinic Directory');
   const clinic = await seedClinicDirectory(prisma);
   console.log(`  Organizations    ${clinic.organizations}`);
   console.log(`  Branches         ${clinic.branches}`);
@@ -245,11 +253,11 @@ async function main() {
   console.log(`  Social links     ${clinic.socialLinks}`);
   console.log(`  Images           ${clinic.images}`);
 
-  section('16/19 Campaign FAQs');
+  section('17/21 Campaign FAQs');
   const faqs = await seedCampaignFaqs(prisma);
   console.log(`  FAQ rows         ${faqs.total}`);
 
-  section('17/19 Video Content Categories');
+  section('18/21 Video Content Categories');
   const videoCategories = await seedVideoCategories(prisma);
   console.log(`  Attempted        ${videoCategories.attempted}`);
   console.log(`  Upserted         ${videoCategories.insertedOrUpdated}`);
@@ -258,7 +266,7 @@ async function main() {
   console.log(`  Missing slugs    ${videoCategories.missingSlugs.join(',') || 'none'}`);
   console.log(`  Duplicate slugs  ${videoCategories.duplicateSlugs.join(',') || 'none'}`);
 
-  section('18/19 App Control Core');
+  section('19/21 App Control Core');
   const appControl = await seedAppControl(prisma);
   console.log(`  Home sections    ${appControl.homeSections}`);
   console.log(`  Navigation items ${appControl.navigationItems}`);
@@ -268,14 +276,14 @@ async function main() {
   console.log(`  Theme settings   ${appControl.themeSettings}`);
   console.log(`  Popup notices    ${appControl.popupNotices}`);
 
-  section('19/19 App Control Reference Data');
+  section('20/21 App Control Reference Data');
   const appControlRefs = await seedAppControlReferenceData(prisma);
   console.log(`  Quick actions    ${appControlRefs.quickActions}`);
   console.log(`  Featured svc     ${appControlRefs.featuredServices}`);
   console.log(`  Offers           ${appControlRefs.offers}`);
   console.log(`  Tutorials        ${appControlRefs.tutorialsGuides}`);
 
-  section('20/20 Partner Clinics (curated homepage list)');
+  section('21/21 Partner Clinics (curated homepage list)');
   const partnerClinics = await seedPartnerClinics(prisma);
   console.log(`  Curated clinics  ${partnerClinics.partnerClinics} (intentionally empty — curate via BPA Admin)`);
 

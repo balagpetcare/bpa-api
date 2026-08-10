@@ -51,7 +51,7 @@ jest.mock('../../../middlewares/authenticate', () => ({
 }));
 
 jest.mock('../../../middlewares/authorize', () => ({
-  requireRole: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  authorize: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 import request from 'supertest';

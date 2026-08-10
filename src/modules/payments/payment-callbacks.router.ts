@@ -161,6 +161,16 @@ function extractOrderRef(query: NormalizedQuery): string | null {
   return getQueryValue(query, ORDER_PARAM_NAMES);
 }
 
+const paymentCallbackSelect = {
+  id: true,
+  merchantTxnId: true,
+  epsTxnId: true,
+  gatewayRef: true,
+  entityType: true,
+  purpose: true,
+  payload: true,
+} as const;
+
 async function findPaymentByReference(ref: string): Promise<CallbackPayment | null> {
   const orWhere: Array<{
     merchantTxnId?: string;
@@ -177,18 +187,23 @@ async function findPaymentByReference(ref: string): Promise<CallbackPayment | nu
     orWhere.push({ id: ref });
   }
 
-  return prisma.payment.findFirst({
+  const direct = await prisma.payment.findFirst({
     where: { OR: orWhere },
-    select: {
-      id: true,
-      merchantTxnId: true,
-      epsTxnId: true,
-      gatewayRef: true,
-      entityType: true,
-      purpose: true,
-      payload: true,
-    },
+    select: paymentCallbackSelect,
   });
+  if (direct) return direct;
+
+  // Fallback for Spay & Neuter: `ref` may be an OLDER, superseded "Retry
+  // Payment" attempt's own merchantTxnId. Payment.merchantTxnId only ever
+  // reflects the FIRST attempt, so a late callback for a later retry won't
+  // match anything above (see retrySpayBookingPayment). No-op for every
+  // other entity type — they never have a SpayPaymentAttempt row.
+  const attempt = await prisma.spayPaymentAttempt.findUnique({
+    where: { merchantTxnId: ref },
+    select: { paymentId: true },
+  });
+  if (!attempt?.paymentId) return null;
+  return prisma.payment.findUnique({ where: { id: attempt.paymentId }, select: paymentCallbackSelect });
 }
 
 function isCampaignPayment(payment: CallbackPayment): boolean {
@@ -269,6 +284,22 @@ async function recoverBooking(
       select: { referenceNo: true },
     });
     return { bookingNumber: don?.referenceNo || null, payment };
+  }
+
+  // Root cause of the "redirected to /community-pet-care/payment/success —
+  // Membership purchase not found" bug for Spay & Neuter payments: this
+  // function previously had no branch for entityType === 'spay_booking', so
+  // it always fell through to `bookingNumber: null` below. getRedirectUrl()
+  // no longer even needs bookingNumber to route a spay_booking payment (see
+  // its own dedicated branch), but resolving it here too keeps the
+  // logCallbackAttempt() audit trail and any future generic-path callers
+  // consistent with every other payment type.
+  if (payment.entityType === 'spay_booking') {
+    const booking = await prisma.spayBooking.findFirst({
+      where: { paymentId: payment.id },
+      select: { bookingNumber: true },
+    });
+    return { bookingNumber: booking?.bookingNumber || null, payment };
   }
 
   return { bookingNumber: null, payment };
@@ -451,9 +482,22 @@ function validateMerchantTxnId(req: Request, res: Response, next: NextFunction):
     const merchantTxnRef = found?.txnId ?? null;
     const epsTxnId = extractEpsTxnId(normalizedQuery);
     const payment = await findPaymentForCallback(normalizedQuery, merchantTxnRef, epsTxnId);
+    // Prefer the RAW reference EPS actually echoed back over
+    // payment.merchantTxnId whenever it's validly formatted. For Spay &
+    // Neuter's multi-attempt retries, payment.merchantTxnId only ever holds
+    // the FIRST attempt's id (see findPaymentByReference's fallback lookup
+    // above) — a later retry's own attempt id must still be the value used
+    // to verify THIS SPECIFIC transaction with EPS (settlePayment calls EPS
+    // with whatever canonicalMerchantTxnId ends up being), never silently
+    // rewritten to a different attempt's id. Only falls back to
+    // payment.merchantTxnId when the raw ref is missing/malformed but a
+    // payment was still found via another matched field (gatewayRef/
+    // epsTxnId) — preserves the original behavior for every other flow,
+    // where the two values are always identical anyway.
     const canonicalMerchantTxnId =
+      (merchantTxnRef && MERCHANT_TXN_ID_RE.test(merchantTxnRef) ? merchantTxnRef : null) ||
       payment?.merchantTxnId?.trim() ||
-      (merchantTxnRef && MERCHANT_TXN_ID_RE.test(merchantTxnRef) ? merchantTxnRef : null);
+      null;
 
     if (!canonicalMerchantTxnId) {
       console.warn(
@@ -506,6 +550,25 @@ function getRedirectUrl(status: 'success' | 'failed', params: { merchantTxnId: s
   if (isMobilePayment(payment)) {
     const mobileStatus = status === 'success' ? 'success' : 'failed';
     return `bpa://payment/${mobileStatus}?txn=${merchantTxnId}${bookingQs}${reasonQs}`;
+  }
+
+  // 3. Spay & Neuter — routed to its own dedicated return page (never the
+  // generic /payment/success page). The generic page's own fallback logic
+  // (bpa_web app/payment/success/page.tsx) redirects ANY success without a
+  // recognized `booking` query param to /community-pet-care/payment/success
+  // — that "used as a generic fallback for every payment type" behavior,
+  // combined with recoverBooking() previously never resolving a
+  // bookingNumber for entityType 'spay_booking' (fixed above), is exactly
+  // what sent verified Spay/Neuter payments to the Community Pet Care
+  // membership-purchase lookup, where they were reported as "Lookup Failed
+  // — Membership purchase not found" despite the payment and booking both
+  // having succeeded. Routing here directly sidesteps that fallback for
+  // every spay_booking payment, success or not — the return page itself
+  // (never this redirect) is what decides success/pending/failed/cancelled
+  // copy, always via its own authenticated, server-verified status call,
+  // never from this URL's query string.
+  if (payment?.entityType === 'spay_booking') {
+    return `${baseUrl}/spay-neuter/payment/return?ref=${encodeURIComponent(merchantTxnId)}`;
   }
 
   const path = status === 'success' ? 'payment/success' : 'payment/failed';

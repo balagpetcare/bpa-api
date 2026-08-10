@@ -20,3 +20,13 @@ export function generateCareCardQrToken(cardId: string, contributionId: string):
 export function buildCareCardVerifyUrl(qrToken: string): string {
   return `${config.FRONTEND_URL}/verify/care-card/${qrToken}`;
 }
+
+export function generateSpayQrToken(bookingId: string, offerId: string): string {
+  return createHmac('sha256', config.QR_SECRET)
+    .update(`spay:${bookingId}:${offerId}`)
+    .digest('hex');
+}
+
+export function buildSpayQrUrl(qrToken: string): string {
+  return `${config.FRONTEND_URL}/verify/spay/${qrToken}`;
+}

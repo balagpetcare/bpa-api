@@ -137,3 +137,51 @@ export const mePetsLimiter = rateLimit({
   legacyHeaders: false,
   handler: buildRateLimitHandler('Too many pet management requests. Please slow down and try again shortly.'),
 });
+
+// ─── Spay & Neuter ────────────────────────────────────────────────────
+
+/** Slot-hold creation — keyed per authenticated user, not IP, so one busy
+ * clinic's shared NAT/proxy can't throttle every owner trying to book.
+ * Capped low enough to make a scripted "hold every slot" capacity-denial
+ * attack impractical without blocking a legitimate owner retrying a race. */
+export const spayHoldLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.SPAY_HOLD_RATE_LIMIT_MAX || '20', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.sub || ipKeyGenerator(req.ip || 'unknown'),
+  handler: buildRateLimitHandler('Too many booking-hold attempts. Please wait a moment and try again.'),
+});
+
+/** Booking creation from a hold — same per-user key, tighter ceiling since
+ * this is the step that actually calls out to EPS. */
+export const spayBookingLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.SPAY_BOOKING_RATE_LIMIT_MAX || '10', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.sub || ipKeyGenerator(req.ip || 'unknown'),
+  handler: buildRateLimitHandler('Too many booking attempts. Please wait a moment and try again.'),
+});
+
+/** QR/booking-code lookup — bookingCode is cryptographically unguessable
+ * and qrToken is an opaque HMAC, so this is defense-in-depth against
+ * scripted scraping/enumeration rather than a brute-force stop. */
+export const spayLookupLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: buildRateLimitHandler('Too many lookup requests. Please wait a moment and try again.'),
+});
+
+/** Refund approve/reject/process and manual-refund-request creation —
+ * keyed per staff user since these are always authenticated actions. */
+export const spayPaymentActionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.sub || ipKeyGenerator(req.ip || 'unknown'),
+  handler: buildRateLimitHandler('Too many payment/refund actions. Please wait a moment and try again.'),
+});

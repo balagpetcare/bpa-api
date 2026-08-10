@@ -170,6 +170,17 @@ const envSchema = z.object({
   MAIL_SYNC_ENABLED: z.preprocess((val) => val === 'true' || val === true || val === '1', z.boolean()).default(true),
   MAIL_SYNC_INTERVAL_MINUTES: z.coerce.number().default(5),
   MAIL_ATTACHMENT_MAX_MB: z.coerce.number().default(15),
+
+  // ─── Spay & Neuter feature kill switch ───────────────────────────────────
+  // Defaults to enabled (true) — this is a live, released feature, so the
+  // flag exists as an emergency *disable* switch, not an opt-in gate.
+  // When 'false': new public offer/availability reads, new slot holds, and
+  // new booking/payment-initiation requests are rejected with a stable
+  // SPAY_NEUTER_DISABLED error. Existing bookings, admin history/reporting,
+  // and refund review remain fully accessible — disabling never hides or
+  // corrupts already-created data. See SpayOffer.status for the separate,
+  // per-offer publication control (this flag is the whole-module switch).
+  SPAY_NEUTER_ENABLED: z.enum(['true', 'false']).default('true'),
 });
 
 const parsed = envSchema.safeParse(process.env);

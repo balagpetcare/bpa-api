@@ -108,7 +108,17 @@ export function requireRole(...allowedRoles: string[]) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const { roles } = req.user;
 
-    if (roles.includes(ROLES.SUPER_ADMIN)) {
+    // Same Central Auth super-admin recognition as authorize() above —
+    // Central Auth issues "SUPER_ADMIN"/"GLOBAL_SUPER_ADMIN" (uppercase),
+    // distinct from bpa_api's own local "super_admin" role name. Without
+    // this, a Central Auth super-admin principal is rejected by every
+    // requireRole()-gated route even though authorize()-gated routes
+    // correctly let them through.
+    if (
+      roles.includes(ROLES.SUPER_ADMIN) ||
+      roles.includes('SUPER_ADMIN') ||
+      roles.includes('GLOBAL_SUPER_ADMIN')
+    ) {
       return next();
     }
 

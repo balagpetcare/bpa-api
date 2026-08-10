@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+// Single source of truth for section types — shared by both the list-query
+// filter and the write schema so they can never drift apart. Extended for
+// the institutional homepage rebuild's new sections (core services, digital
+// ecosystem, Furtail community, video hub, clinic network, governance
+// documents) alongside the original set.
+const homepageSectionTypeValues = [
+  'hero', 'stats', 'mission', 'campaigns', 'news', 'events', 'vision', 'committee', 'cta', 'partners', 'custom',
+  'core_services', 'digital_ecosystem', 'furtail_community', 'video_hub', 'clinic_network', 'governance_documents',
+] as const;
+export const homepageSectionTypeSchema = z.enum(homepageSectionTypeValues);
+
 // Normalise empty-string query params (e.g. locale="") to the default "en"
 const localeSchema = z.string().trim().optional().transform((v) => v || 'en').pipe(z.string().min(2).max(10));
 const nullableText = z.string().trim().optional().nullable();
@@ -23,13 +34,13 @@ export const sectionListQuerySchema = z.object({
   locale: localeSchema.optional(),
   page: z.coerce.number().positive().optional(),
   limit: z.coerce.number().positive().max(100).optional(),
-  type: z.enum(['hero', 'stats', 'mission', 'campaigns', 'news', 'events', 'vision', 'committee', 'cta', 'partners', 'custom']).optional(),
+  type: homepageSectionTypeSchema.optional(),
   isVisible: z.enum(['true', 'false']).optional(),
 });
 
 export const sectionWriteSchema = z.object({
   locale: localeSchema.optional(),
-  type: z.enum(['hero', 'stats', 'mission', 'campaigns', 'news', 'events', 'vision', 'committee', 'cta', 'partners', 'custom']),
+  type: homepageSectionTypeSchema,
   source: z.enum(['manual', 'automatic', 'static']).default('static'),
   title: nullableText,
   eyebrow: nullableText,

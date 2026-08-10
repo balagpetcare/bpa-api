@@ -18,4 +18,11 @@ describe('master seed contract', () => {
       MASTER_SEED_MODULE_ORDER.indexOf('app-control'),
     );
   });
+
+  it('includes platform showcase drafts after CMS setup', () => {
+    expect(MASTER_SEED_MODULE_ORDER).toContain('platform-showcases');
+    expect(MASTER_SEED_MODULE_ORDER.indexOf('cms')).toBeLessThan(
+      MASTER_SEED_MODULE_ORDER.indexOf('platform-showcases'),
+    );
+  });
 });

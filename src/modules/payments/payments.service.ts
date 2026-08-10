@@ -6,8 +6,14 @@ import * as repo from './payments.repository';
 import { settleCampaignPayment, cancelCampaignPayment } from '../campaign-registrations/campaign-registrations.service';
 import { settleDonationPayment, cancelDonationPayment } from '../donations/donations.service';
 import { issueCarePartnerCardOnPayment } from '../care-partner-cards/care-partner-cards.service';
+import { settleSpayBookingPayment, cancelSpayBookingPayment } from '../spay-neuter/spay-neuter.booking.service';
 import { config } from '../../config';
 import { publishOutboxEvent, enqueueIfNew } from '../push-notifications/outbox';
+import {
+  notifySpayBookingConfirmed,
+  notifySpayPaymentSuccessful,
+  notifySpaySlipReady,
+} from '../spay-neuter/spay-neuter.notifications';
 
 // Payment notifications never include the amount or gateway reference —
 // financial detail stays in the authenticated payment history screen, not
@@ -15,6 +21,19 @@ import { publishOutboxEvent, enqueueIfNew } from '../push-notifications/outbox';
 // the corresponding UserNotification row for in-app viewing.
 async function notifyPaymentOutcome(paymentId: string, outcome: 'success' | 'failed'): Promise<void> {
   try {
+    const spayBooking = await prisma.spayBooking.findFirst({
+      where: { paymentId },
+      select: { id: true },
+    });
+    if (spayBooking) {
+      if (outcome === 'success') {
+        await notifySpayPaymentSuccessful(spayBooking.id);
+        await notifySpayBookingConfirmed(spayBooking.id);
+        await notifySpaySlipReady(spayBooking.id);
+      }
+      return;
+    }
+
     const registration = await prisma.campaignRegistration.findFirst({
       where: { paymentId },
       select: {
@@ -133,20 +152,32 @@ export async function settlePayment(merchantTxnId: string): Promise<SettleResult
 
   if (epsStatus === 'Success') {
     await repo.updatePaymentStatus(payment.id, 'success', epsPayload);
-    await activateLinkedEntities(payment);
+    await activateLinkedEntities(payment, merchantTxnId);
     await notifyPaymentOutcome(payment.id, 'success');
     return 'success';
   }
 
   if (epsStatus === 'Cancelled') {
-    await repo.updatePaymentStatus(payment.id, 'cancelled', epsPayload);
-    await deactivateLinkedEntities(payment);
+    if (payment.entityType === 'spay_booking') {
+      // Owns Payment.status itself, staleness-aware — a late Cancelled
+      // verify for an attempt the owner has since retried past must never
+      // lock Payment.status (or cancel the booking) out from under a newer,
+      // still-live attempt. See cancelSpayBookingPayment's docstring.
+      await cancelSpayBookingPayment(payment.id, merchantTxnId, 'cancelled');
+    } else {
+      await repo.updatePaymentStatus(payment.id, 'cancelled', epsPayload);
+      await deactivateLinkedEntities(payment, merchantTxnId);
+    }
     return 'cancelled';
   }
 
   if (epsStatus === 'Failed') {
-    await repo.updatePaymentStatus(payment.id, 'failed', epsPayload);
-    await deactivateLinkedEntities(payment);
+    if (payment.entityType === 'spay_booking') {
+      await cancelSpayBookingPayment(payment.id, merchantTxnId, 'failed');
+    } else {
+      await repo.updatePaymentStatus(payment.id, 'failed', epsPayload);
+      await deactivateLinkedEntities(payment, merchantTxnId);
+    }
     await notifyPaymentOutcome(payment.id, 'failed');
     return 'failed';
   }
@@ -166,6 +197,14 @@ export async function cancelPaymentRecord(merchantTxnId: string): Promise<void> 
 
   const alreadyTerminal: string[] = ['success', 'failed', 'cancelled', 'refunded'];
   if (alreadyTerminal.includes(payment.status)) return;
+
+  if (payment.entityType === 'spay_booking') {
+    // Staleness-aware — see cancelSpayBookingPayment. A user-cancel
+    // callback naming an attempt the owner has already retried past must
+    // not lock Payment.status out from under the newer, still-live one.
+    await cancelSpayBookingPayment(payment.id, merchantTxnId, 'cancelled');
+    return;
+  }
 
   await repo.updatePaymentStatus(payment.id, 'cancelled', { cancelledVia: 'user_cancel_callback' });
   await deactivateLinkedEntities(payment);
@@ -251,7 +290,7 @@ export async function manualMarkPaid(paymentId: string, adminNote?: string): Pro
 
 // ─── Activate linked entities on payment success ──────────────────
 
-async function activateLinkedEntities(payment: { id: string; entityType: string | null; purpose?: string; payload?: unknown }): Promise<void> {
+async function activateLinkedEntities(payment: { id: string; entityType: string | null; purpose?: string; payload?: unknown }, merchantTxnId?: string): Promise<void> {
   if (payment.entityType === 'campaign') {
     await settleCampaignPayment(payment.id);
     return;
@@ -262,6 +301,10 @@ async function activateLinkedEntities(payment: { id: string; entityType: string 
   }
   if (payment.entityType === 'care_partner') {
     await issueCarePartnerCardOnPayment(payment.id);
+    return;
+  }
+  if (payment.entityType === 'spay_booking') {
+    await settleSpayBookingPayment(payment.id, merchantTxnId);
     return;
   }
   if (payment.purpose === 'community_membership') {
@@ -290,7 +333,7 @@ async function activateLinkedEntities(payment: { id: string; entityType: string 
   });
 }
 
-async function deactivateLinkedEntities(payment: { id: string; entityType: string | null; purpose?: string }): Promise<void> {
+async function deactivateLinkedEntities(payment: { id: string; entityType: string | null; purpose?: string }, merchantTxnId?: string): Promise<void> {
   if (payment.entityType === 'campaign') {
     await cancelCampaignPayment(payment.id);
     return;
@@ -301,6 +344,10 @@ async function deactivateLinkedEntities(payment: { id: string; entityType: strin
   }
   if (payment.entityType === 'care_partner') {
     await cancelCarePartnerContribution(payment.id);
+    return;
+  }
+  if (payment.entityType === 'spay_booking') {
+    await cancelSpayBookingPayment(payment.id, merchantTxnId);
     return;
   }
   if (payment.purpose === 'membership_campaign_upgrade') {

@@ -26,6 +26,8 @@ const RESOURCES = [
   'app_control', 'partner_clinics',
   'clinic_organizations', 'clinic_branches', 'clinic_imports',
   'notifications', 'notification_templates', 'notification_automation_rules',
+  'spay_offers', 'spay_clinics', 'spay_slots', 'spay_bookings',
+  'spay_checkin', 'spay_refunds', 'spay_reports',
 ];
 
 const ACTIONS = [
@@ -77,6 +79,8 @@ const ROLE_DEFS: RoleDef[] = [
       'partner_clinics',
       'clinic_organizations', 'clinic_branches', 'clinic_imports',
       'notifications', 'notification_templates', 'notification_automation_rules',
+      'spay_offers', 'spay_clinics', 'spay_slots', 'spay_bookings',
+      'spay_checkin', 'spay_refunds', 'spay_reports',
     ],
     actions: ACTIONS,
     exactPermissions: [
@@ -171,6 +175,37 @@ const ROLE_DEFS: RoleDef[] = [
       'community_membership_card_verification',
     ],
     actions: ['read'],
+  },
+  {
+    // Clinic-side roles are deliberately narrow: no 'manage' or 'approve' on
+    // spay_refunds is ever granted here (authorize.hasPermission() treats
+    // "<resource>:manage" as a wildcard for that resource, so a broad
+    // "manage" grant would silently include refund approval). Clinic staff
+    // may only create a refund request via the exactPermissions entry below;
+    // approval is reserved for super_admin/admin. See implementation-contract.md §5.3.
+    name: 'clinic_admin',
+    description: 'Spay & Neuter — manages one clinic\'s slots, hours, capacity, bookings, and can raise (but never approve) refund requests',
+    resources: ['spay_clinics', 'spay_slots', 'spay_bookings', 'spay_checkin', 'spay_refunds', 'spay_reports'],
+    actions: ['read', 'update', 'checkin'],
+    exactPermissions: [
+      { resource: 'spay_clinics', action: 'manage' },
+      { resource: 'spay_slots', action: 'manage' },
+      { resource: 'spay_refunds', action: 'create' },
+    ],
+  },
+  {
+    name: 'clinic_vet',
+    description: 'Spay & Neuter — records pre-op assessment, operation outcome, and doctor notes for their own clinic\'s bookings',
+    resources: ['spay_bookings', 'spay_checkin'],
+    actions: ['read', 'checkin'],
+    exactPermissions: [{ resource: 'spay_bookings', action: 'update' }],
+  },
+  {
+    name: 'clinic_front_desk',
+    description: 'Spay & Neuter — check-in, no-show, and cancellation at the clinic front desk; no payment or refund access',
+    resources: ['spay_bookings', 'spay_checkin'],
+    actions: ['read', 'checkin'],
+    exactPermissions: [{ resource: 'spay_bookings', action: 'update' }],
   },
 ];
 

@@ -35,11 +35,18 @@ export class AppError extends Error {
     return new AppError(HTTP_STATUS.NOT_FOUND, code, `${resource} not found`);
   }
 
-  static conflict(message: string): AppError {
-    return new AppError(HTTP_STATUS.CONFLICT, "CONFLICT", message);
+  static conflict(message: string, code = "CONFLICT"): AppError {
+    return new AppError(HTTP_STATUS.CONFLICT, code, message);
   }
 
   static internal(message: string, code = "INTERNAL_ERROR"): AppError {
     return new AppError(HTTP_STATUS.INTERNAL_ERROR, code, message);
+  }
+
+  static serviceUnavailable(
+    message: string,
+    code = "SERVICE_UNAVAILABLE",
+  ): AppError {
+    return new AppError(HTTP_STATUS.SERVICE_UNAVAILABLE, code, message);
   }
 }

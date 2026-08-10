@@ -1,12 +1,39 @@
-import { Worker, Job } from 'bullmq';
+import { Job, Worker } from 'bullmq';
 import { prisma } from '../../database/prisma';
-import { getRedisConnection } from '../redis';
-import { DELIVERY_QUEUE_NAME } from '../queues';
 import { firebaseProvider } from '../../providers/firebase.provider';
+import { sendEmail } from '../../services/email.service';
+import { DELIVERY_QUEUE_NAME } from '../queues';
+import { getRedisConnection } from '../redis';
 
-async function processDelivery(job: Job<{ deliveryId: string }>): Promise<void> {
-  const { deliveryId } = job.data;
+async function recordEmailLog(params: {
+  deliveryId: string;
+  to: string;
+  subject: string;
+  body: string;
+  providerRef?: string | null;
+  status: 'queued' | 'sent' | 'failed';
+  failureReason?: string | null;
+  dedupeKey?: string | null;
+}): Promise<void> {
+  await prisma.emailLog.create({
+    data: {
+      to: params.to,
+      subject: params.subject,
+      body: params.body,
+      status: params.status,
+      provider: 'smtp',
+      providerRef: params.providerRef ?? null,
+      failureReason: params.failureReason ?? null,
+      sentAt: params.status === 'sent' ? new Date() : null,
+      payload: {
+        notificationDeliveryId: params.deliveryId,
+        dedupeKey: params.dedupeKey ?? null,
+      },
+    },
+  });
+}
 
+async function processPushDelivery(deliveryId: string): Promise<void> {
   const delivery = await prisma.notificationDelivery.findUnique({
     where: { id: deliveryId },
     include: { device: true },
@@ -48,7 +75,7 @@ async function processDelivery(job: Job<{ deliveryId: string }>): Promise<void> 
   if (result.ok) {
     await prisma.notificationDelivery.update({
       where: { id: delivery.id },
-      data: { status: 'sent', providerMessageId: result.providerMessageId, sentAt: new Date() },
+      data: { status: 'sent', providerMessageId: result.providerMessageId, sentAt: new Date(), lastError: null },
     });
     if (delivery.campaignId) {
       await prisma.notificationCampaign.update({
@@ -60,9 +87,6 @@ async function processDelivery(job: Job<{ deliveryId: string }>): Promise<void> 
   }
 
   if (result.error === 'FCM_DISABLED') {
-    // No Firebase credentials configured — this is expected in dev/CI.
-    // Mark as sent-but-skipped so the pipeline doesn't spin retries forever
-    // over a configuration gap rather than a real send failure.
     await prisma.notificationDelivery.update({
       where: { id: delivery.id },
       data: { status: 'failed', lastError: 'FCM_DISABLED', failedAt: new Date() },
@@ -79,7 +103,7 @@ async function processDelivery(job: Job<{ deliveryId: string }>): Promise<void> 
       where: { id: delivery.id },
       data: { status: 'invalid_token', lastError: result.error, failedAt: new Date() },
     });
-    return; // do not retry — the token is permanently gone
+    return;
   }
 
   const retryCount = delivery.retryCount + 1;
@@ -100,8 +124,126 @@ async function processDelivery(job: Job<{ deliveryId: string }>): Promise<void> 
     });
   }
   if (!isFinal) {
-    throw new Error(result.error); // triggers BullMQ's own exponential backoff retry
+    throw new Error(result.error);
   }
+}
+
+async function processEmailDelivery(deliveryId: string): Promise<void> {
+  const delivery = await prisma.notificationDelivery.findUnique({
+    where: { id: deliveryId },
+  });
+  if (!delivery || delivery.status === 'delivered' || delivery.status === 'sent') return;
+
+  const [notification, user] = await Promise.all([
+    delivery.userNotificationId ? prisma.userNotification.findUnique({ where: { id: delivery.userNotificationId } }) : null,
+    prisma.user.findUnique({ where: { id: delivery.userId }, select: { email: true } }),
+  ]);
+
+  if (!notification) {
+    await prisma.notificationDelivery.update({
+      where: { id: delivery.id },
+      data: { status: 'failed', lastError: 'NOTIFICATION_NOT_FOUND', failedAt: new Date() },
+    });
+    return;
+  }
+
+  if (!user?.email) {
+    await prisma.notificationDelivery.update({
+      where: { id: delivery.id },
+      data: { status: 'failed', lastError: 'NO_EMAIL_ADDRESS', failedAt: new Date() },
+    });
+    return;
+  }
+
+  const locale = notification.titleBn || notification.bodyBn ? 'bn' : 'en';
+  const subject = (locale === 'bn' && notification.titleBn) || notification.title;
+  const text = (locale === 'bn' && notification.bodyBn) || notification.body;
+  const html = `
+    <p>${text}</p>
+    ${notification.deepLink ? `<p><a href="${notification.deepLink}">Open booking details</a></p>` : ''}
+  `;
+
+  const result = await sendEmail({
+    to: user.email,
+    subject,
+    text,
+    html,
+    locale,
+  });
+
+  if (result.ok) {
+    await prisma.notificationDelivery.update({
+      where: { id: delivery.id },
+      data: { status: 'sent', providerMessageId: result.providerMessageId, sentAt: new Date(), lastError: null },
+    });
+    await recordEmailLog({
+      deliveryId: delivery.id,
+      to: user.email,
+      subject,
+      body: text,
+      providerRef: result.providerMessageId,
+      status: 'sent',
+      dedupeKey: notification.dedupeKey,
+    });
+    return;
+  }
+
+  if (result.disabled) {
+    await prisma.notificationDelivery.update({
+      where: { id: delivery.id },
+      data: { status: 'failed', lastError: 'EMAIL_DISABLED', failedAt: new Date() },
+    });
+    await recordEmailLog({
+      deliveryId: delivery.id,
+      to: user.email,
+      subject,
+      body: text,
+      status: 'failed',
+      failureReason: 'EMAIL_DISABLED',
+      dedupeKey: notification.dedupeKey,
+    });
+    return;
+  }
+
+  const retryCount = delivery.retryCount + 1;
+  const isFinal = retryCount >= delivery.maxRetries;
+  await prisma.notificationDelivery.update({
+    where: { id: delivery.id },
+    data: {
+      status: 'failed',
+      retryCount,
+      lastError: result.error,
+      failedAt: isFinal ? new Date() : undefined,
+    },
+  });
+  await recordEmailLog({
+    deliveryId: delivery.id,
+    to: user.email,
+    subject,
+    body: text,
+    status: 'failed',
+    failureReason: result.error,
+    dedupeKey: notification.dedupeKey,
+  });
+  if (!isFinal) {
+    throw new Error(result.error);
+  }
+}
+
+export async function processDelivery(job: Job<{ deliveryId: string }>): Promise<void> {
+  const { deliveryId } = job.data;
+  const delivery = await prisma.notificationDelivery.findUnique({
+    where: { id: deliveryId },
+    select: { id: true, deviceId: true },
+  });
+  if (!delivery) return;
+
+  if (delivery.deviceId) {
+    await processPushDelivery(deliveryId);
+    return;
+  }
+
+  await processEmailDelivery(deliveryId);
 }
 
 export function createDeliveryWorker(): Worker {

@@ -8,6 +8,7 @@ import { startPetReminderScanJob } from './jobs/pet-reminder-scan.job';
 import { startMembershipExpiringReminderJob } from './jobs/membership-expiry.job';
 import { startCampaignStartingSoonScanJob } from './jobs/campaign-starting-soon-scan.job';
 import { startScheduledCampaignDispatchJob } from './jobs/scheduled-campaign-dispatch.job';
+import { startSpayReminderScanJob } from './modules/spay-neuter/spay-neuter.notifications';
 
 async function bootstrap(): Promise<void> {
   await prisma.$connect();
@@ -23,6 +24,7 @@ async function bootstrap(): Promise<void> {
   const membershipExpiringTimer = startMembershipExpiringReminderJob();
   const campaignStartingSoonTimer = startCampaignStartingSoonScanJob();
   const scheduledCampaignDispatchTimer = startScheduledCampaignDispatchJob();
+  const spayReminderTimer = startSpayReminderScanJob();
 
   console.log('[Worker] Notification outbox + delivery workers started');
 
@@ -55,6 +57,7 @@ async function bootstrap(): Promise<void> {
     clearInterval(membershipExpiringTimer);
     clearInterval(campaignStartingSoonTimer);
     clearInterval(scheduledCampaignDispatchTimer);
+    clearInterval(spayReminderTimer);
     healthServer.close();
     await Promise.all([outboxWorker.close(), deliveryWorker.close()]);
     await closeRedisConnection();

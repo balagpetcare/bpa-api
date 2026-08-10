@@ -46,7 +46,22 @@ export async function createPayment(data: {
 }
 
 export async function findPaymentByMerchantTxnId(merchantTxnId: string) {
-  return prisma.payment.findUnique({ where: { merchantTxnId } });
+  const direct = await prisma.payment.findUnique({ where: { merchantTxnId } });
+  if (direct) return direct;
+
+  // Fallback for Spay & Neuter: Payment.merchantTxnId only ever reflects the
+  // FIRST EPS attempt for a booking — a later "Retry Payment" attempt gets
+  // its own merchantTxnId recorded only on SpayPaymentAttempt (see
+  // retrySpayBookingPayment in spay-neuter.booking.service.ts). A callback
+  // for one of those later attempts would otherwise 404 here even though
+  // the Payment/booking genuinely exists. A no-op for every other entity
+  // type, which never has a SpayPaymentAttempt row at all.
+  const attempt = await prisma.spayPaymentAttempt.findUnique({
+    where: { merchantTxnId },
+    select: { paymentId: true },
+  });
+  if (!attempt?.paymentId) return null;
+  return prisma.payment.findUnique({ where: { id: attempt.paymentId } });
 }
 
 export async function findPaymentById(id: string) {
